@@ -79,6 +79,8 @@ def build_investigation_result(
         "best_headline": best["headline"] if best else None,
         "best_source": best["source_name"] if best else None,
         "best_source_url": best["source_url"] if best else None,
+        "best_evidence": best,
+        "evidence_candidates": consolidated["independent_candidates"],
     }
 
 
