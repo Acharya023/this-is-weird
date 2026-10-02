@@ -9,6 +9,7 @@ from src.investigation.evidence import (
     consolidate_evidence,
     source_family,
     source_quality,
+    infer_event_type,
 )
 
 
@@ -107,6 +108,41 @@ class EvidenceTests(unittest.TestCase):
                 "Reuters",
             ),
             "reuters",
+        )
+
+    def test_distinctive_event_terms_beat_generic_financial_language(self):
+        self.assertEqual(
+            infer_event_type(
+                "Maruti shares surge after GST tax cut. "
+                "The company also reported quarterly profit and revenue."
+            ),
+            "policy_event",
+        )
+
+    def test_generic_profit_language_is_not_automatically_earnings(self):
+        self.assertEqual(
+            infer_event_type(
+                "Shares rise after a policy announcement. "
+                "The article compares last quarter profit and revenue."
+            ),
+            "policy_event",
+        )
+
+    def test_results_phrase_identifies_earnings(self):
+        self.assertEqual(
+            infer_event_type(
+                "Company quarterly results beat analyst estimates."
+            ),
+            "earnings",
+        )
+
+    def test_block_trade_beats_background_earnings_language(self):
+        self.assertEqual(
+            infer_event_type(
+                "Shares fall after a block deal. "
+                "The article also discusses the company's profit."
+            ),
+            "block_trade",
         )
 
     def test_normalized_publisher_quality_is_consistent(self):
