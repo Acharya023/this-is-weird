@@ -1,4 +1,4 @@
-"""Evidence normalization, scoring and corroboration."""
+"""Evidence normalization, scoring and event grouping."""
 
 from urllib.parse import urlparse
 
@@ -32,32 +32,24 @@ def normalize_publisher_name(source_name: str | None) -> str:
     """Normalize common publisher-name variants before grouping evidence."""
     if not source_name:
         return "unknown"
-
     name = " ".join(source_name.strip().lower().split())
     return PUBLISHER_ALIASES.get(name, name)
 
 
-def source_family(
-    url: str | None,
-    source_name: str | None = None,
-) -> str:
+def source_family(url: str | None, source_name: str | None = None) -> str:
     """Collapse known syndication and publisher aliases into evidence families."""
     domain = source_domain(url)
-
     publisher = normalize_publisher_name(source_name)
 
     if domain == "news.google.com" and source_name:
         return publisher
-
     if publisher == "reuters" or domain in {"reuters.com", "reuters"}:
         return "reuters"
-
     return normalize_publisher_name(domain)
 
 
 def classify_event_direction(text: str) -> str:
     text = text.lower()
-
     positive_terms = [
         "surge", "rally", "rose", "gains", "higher",
         "growth", "upgrade", "strong", "beats", "benefit",
@@ -68,10 +60,8 @@ def classify_event_direction(text: str) -> str:
         "lower", "downgrade", "miss", "weak", "pressure",
         "cut forecast", "negative",
     ]
-
     positive = sum(term in text for term in positive_terms)
     negative = sum(term in text for term in negative_terms)
-
     if positive > negative:
         return "positive"
     if negative > positive:
@@ -80,13 +70,8 @@ def classify_event_direction(text: str) -> str:
 
 
 def infer_event_type(text: str) -> str:
-    """Infer an event from distinctive catalyst language.
-
-    Generic words such as profit or revenue are intentionally weak because
-    articles about another catalyst often mention historical financials.
-    """
+    """Infer a likely catalyst from distinctive event language."""
     text = text.lower()
-
     patterns = {
         "block_trade": [
             ("block deal", 5), ("bulk deal", 5), ("stake sale", 5),
@@ -127,40 +112,26 @@ def infer_event_type(text: str) -> str:
             ("nim", 2), ("provisions", 2), ("bad loans", 2),
         ],
     }
-
     scores = {
-        event_type: sum(
-            weight for phrase, weight in phrases if phrase in text
-        )
+        event_type: sum(weight for phrase, weight in phrases if phrase in text)
         for event_type, phrases in patterns.items()
     }
-
     best_type, best_score = max(scores.items(), key=lambda item: item[1])
     return best_type if best_score >= 4 else "unknown"
 
 
 def source_quality(source_name: str) -> float:
     source = normalize_publisher_name(source_name)
-
     if source in {
-        "reuters",
-        "bloomberg",
-        "official exchange",
-        "company filing",
-        "company investor relations",
+        "reuters", "bloomberg", "official exchange",
+        "company filing", "company investor relations",
     }:
         return 1.00
-
     if source in {
-        "business standard",
-        "moneycontrol",
-        "economic times",
-        "financial express",
-        "livemint",
-        "indian express",
+        "business standard", "moneycontrol", "economic times",
+        "financial express", "livemint", "indian express",
     }:
         return 0.85
-
     return 0.60
 
 
@@ -181,7 +152,6 @@ def event_specificity(event_type: str) -> float:
 
 def temporal_relevance(event_date, anomaly_date) -> float:
     distance = abs((event_date - anomaly_date).days)
-
     if distance == 0:
         return 1.00
     if distance == 1:
@@ -211,7 +181,6 @@ def evidence_relevance_score(candidate: dict) -> float:
         else 0.00 if candidate["direction_matches"] is False
         else 0.50
     )
-
     return (
         candidate["temporal_relevance"] * 0.40
         + direction * 0.25
@@ -231,10 +200,7 @@ def build_evidence_candidate(
     source_name,
     source_url,
 ) -> dict:
-    direction = classify_event_direction(
-        f"{headline} {summary}"
-    )
-
+    direction = classify_event_direction(f"{headline} {summary}")
     candidate = {
         "symbol": symbol,
         "anomaly_date": anomaly_date,
@@ -245,46 +211,32 @@ def build_evidence_candidate(
         "source_name": source_name,
         "source_url": source_url,
         "event_direction": direction,
-        "date_distance_days": abs(
-            (event_date - anomaly_date).days
-        ),
-        "temporal_relevance": temporal_relevance(
-            event_date,
-            anomaly_date,
-        ),
-        "direction_matches": direction_matches(
-            direction,
-            stock_return,
-        ),
+        "date_distance_days": abs((event_date - anomaly_date).days),
+        "temporal_relevance": temporal_relevance(event_date, anomaly_date),
+        "direction_matches": direction_matches(direction, stock_return),
     }
-
     candidate["source_quality"] = source_quality(source_name)
     candidate["event_specificity"] = event_specificity(event_type)
-    candidate["evidence_relevance_score"] = evidence_relevance_score(
-        candidate
-    )
-
+    candidate["evidence_relevance_score"] = evidence_relevance_score(candidate)
+    candidate["source_family"] = source_family(source_url, source_name)
     return candidate
 
 
 def build_search_evidence(target: dict, search_results: list[dict]) -> list[dict]:
     """Normalize provider results into scored evidence candidates."""
     candidates = []
-
     for result in search_results:
         event_date = result.get("published_date")
         if not event_date:
             continue
-
         if isinstance(event_date, str):
             from datetime import date
             event_date = date.fromisoformat(event_date)
 
         text = f"{result.get('title', '')} {result.get('text', '')}"
-
         event_type = result.get("event_type") or infer_event_type(text)
 
-        candidate = build_evidence_candidate(
+        candidates.append(build_evidence_candidate(
             symbol=target["symbol"],
             anomaly_date=target["anomaly_date"],
             stock_return=target["daily_return"],
@@ -292,22 +244,15 @@ def build_search_evidence(target: dict, search_results: list[dict]) -> list[dict
             event_type=event_type,
             headline=result.get("title", ""),
             summary=result.get("text", ""),
-            source_name=result.get("source_name")
-            or source_domain(result.get("url")),
+            source_name=result.get("source_name") or source_domain(result.get("url")),
             source_url=result.get("url"),
-        )
+        ))
 
-        candidates.append(candidate)
-
-    return sorted(
-        candidates,
-        key=lambda x: x["evidence_relevance_score"],
-        reverse=True,
-    )
+    return sorted(candidates, key=lambda x: x["evidence_relevance_score"], reverse=True)
 
 
 def consolidate_evidence(candidates: list[dict]) -> dict:
-    """Deduplicate source families and summarize corroboration."""
+    """Deduplicate publishers/syndication and summarize raw evidence."""
     if not candidates:
         return {
             "candidate_count": 0,
@@ -319,28 +264,16 @@ def consolidate_evidence(candidates: list[dict]) -> dict:
             "independent_candidates": [],
         }
 
-    ranked = sorted(
-        candidates,
-        key=lambda x: x["evidence_relevance_score"],
-        reverse=True,
-    )
-
+    ranked = sorted(candidates, key=lambda x: x["evidence_relevance_score"], reverse=True)
     independent = []
     seen_families = set()
     seen_headlines = set()
 
     for candidate in ranked:
-        family = source_family(
-            candidate["source_url"],
-            candidate["source_name"],
-        )
+        family = candidate["source_family"]
         headline = candidate["headline"].lower().strip()
-
-        if headline in seen_headlines:
+        if headline in seen_headlines or family in seen_families:
             continue
-        if family in seen_families:
-            continue
-
         seen_headlines.add(headline)
         seen_families.add(family)
         independent.append(candidate)
@@ -349,40 +282,113 @@ def consolidate_evidence(candidates: list[dict]) -> dict:
         "candidate_count": len(candidates),
         "independent_source_count": len(independent),
         "source_families": sorted(seen_families),
-        "direction_matches": sum(
-            c["direction_matches"] is True for c in independent
-        ),
-        "direction_conflicts": sum(
-            c["direction_matches"] is False for c in independent
-        ),
+        "direction_matches": sum(c["direction_matches"] is True for c in independent),
+        "direction_conflicts": sum(c["direction_matches"] is False for c in independent),
         "best_candidate": independent[0] if independent else None,
         "independent_candidates": independent,
     }
 
 
-def calculate_evidence_strength(consolidated: dict) -> float:
-    """Calculate support strength; this is not a causality probability."""
-    best = consolidated["best_candidate"]
+def build_event_groups(candidates: list[dict]) -> list[dict]:
+    """Group evidence by inferred catalyst and score the groups.
 
+    Publisher count is deliberately capped: several outlets may describe the
+    same underlying report. The group score rewards temporal fit, direction
+    agreement and a small amount of source-family diversity rather than raw
+    article count.
+    """
+    groups = {}
+    for candidate in candidates:
+        event_type = candidate.get("event_type") or "unknown"
+        groups.setdefault(event_type, []).append(candidate)
+
+    event_groups = []
+    for event_type, members in groups.items():
+        ranked = sorted(
+            members,
+            key=lambda x: x["evidence_relevance_score"],
+            reverse=True,
+        )
+
+        family_best = {}
+        for candidate in ranked:
+            family = candidate["source_family"]
+            if family not in family_best:
+                family_best[family] = candidate
+
+        independent = sorted(
+            family_best.values(),
+            key=lambda x: x["evidence_relevance_score"],
+            reverse=True,
+        )
+        top = independent[:3]
+
+        matches = sum(c["direction_matches"] is True for c in independent)
+        conflicts = sum(c["direction_matches"] is False for c in independent)
+        directional = matches + conflicts
+        direction_agreement = matches / directional if directional else 0.50
+
+        family_diversity = min(len(independent) / 3.0, 1.0)
+        best_score = independent[0]["evidence_relevance_score"] if independent else 0.0
+        mean_top_score = (
+            sum(c["evidence_relevance_score"] for c in top) / len(top)
+            if top else 0.0
+        )
+        temporal_fit = (
+            sum(c["temporal_relevance"] for c in top) / len(top)
+            if top else 0.0
+        )
+
+        group_score = min(
+            0.40 * best_score
+            + 0.20 * mean_top_score
+            + 0.15 * temporal_fit
+            + 0.15 * direction_agreement
+            + 0.10 * family_diversity,
+            1.0,
+        )
+
+        event_groups.append({
+            "event_type": event_type,
+            "score": group_score,
+            "candidate_count": len(members),
+            "independent_source_count": len(independent),
+            "source_families": [c["source_family"] for c in independent],
+            "direction_matches": matches,
+            "direction_conflicts": conflicts,
+            "direction_agreement": direction_agreement,
+            "best_candidate": independent[0] if independent else None,
+            "evidence_candidates": independent[:5],
+        })
+
+    return sorted(
+        event_groups,
+        key=lambda group: (
+            group["score"],
+            group["best_candidate"]["evidence_relevance_score"]
+            if group["best_candidate"] else 0.0,
+        ),
+        reverse=True,
+    )
+
+
+def calculate_event_group_strength(group: dict | None) -> float:
+    """Return catalyst support strength, not a causality probability."""
+    return group["score"] if group else 0.0
+
+
+def calculate_evidence_strength(consolidated: dict) -> float:
+    """Backward-compatible raw-evidence support strength."""
+    best = consolidated["best_candidate"]
     if not best:
         return 0.0
 
     count = consolidated["independent_source_count"]
-
-    corroboration = (
-        1.00 if count >= 3
-        else 0.80 if count == 2
-        else 0.50 if count == 1
-        else 0.00
-    )
-
+    corroboration = 1.00 if count >= 3 else 0.80 if count == 2 else 0.50
     matches = consolidated["direction_matches"]
     conflicts = consolidated["direction_conflicts"]
     total = matches + conflicts
-
-    direction_agreement = (
-        matches / total if total else 0.50
-    )
+    direction_agreement = matches / total if total else 0.50
 
     return min(
         best["evidence_relevance_score"] * 0.55
