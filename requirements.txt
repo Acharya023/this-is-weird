@@ -1,6 +1,8 @@
 huggingface_hub>=0.30
 transformers>=4.50
 sentencepiece>=0.2
+gliner>=0.2
 polars>=1.0
+torch>=2.0
 
 requests>=2.31
