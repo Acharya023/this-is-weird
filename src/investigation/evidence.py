@@ -224,7 +224,7 @@ def evidence_relevance_score(candidate: dict) -> float:
         + direction * 0.25
         + candidate["source_quality"] * 0.20
         + candidate["event_specificity"] * 0.15
-    )
+    ) * candidate["entity_relevance"]
 
 
 def build_evidence_candidate(
@@ -252,6 +252,7 @@ def build_evidence_candidate(
         "date_distance_days": abs((event_date - anomaly_date).days),
         "temporal_relevance": temporal_relevance(event_date, anomaly_date),
         "direction_matches": direction_matches(direction, stock_return),
+        "entity_relevance": entity_relevance(symbol, headline, summary),
     }
     candidate["source_quality"] = source_quality(source_name)
     candidate["event_specificity"] = event_specificity(event_type)
@@ -261,12 +262,14 @@ def build_evidence_candidate(
 
 
 def build_search_evidence(target: dict, search_results: list[dict]) -> list[dict]:
-    """Normalize provider results into scored evidence candidates."""
+    """Normalize provider results into scored, entity-relevant evidence."""
     candidates = []
+
     for result in search_results:
         event_date = result.get("published_date")
         if not event_date:
             continue
+
         if isinstance(event_date, str):
             from datetime import date
             event_date = date.fromisoformat(event_date)
@@ -282,11 +285,24 @@ def build_search_evidence(target: dict, search_results: list[dict]) -> list[dict
             event_type=event_type,
             headline=result.get("title", ""),
             summary=result.get("text", ""),
-            source_name=result.get("source_name") or source_domain(result.get("url")),
+            source_name=(
+                result.get("source_name")
+                or source_domain(result.get("url"))
+            ),
             source_url=result.get("url"),
-        ))
+        )
 
-    return sorted(candidates, key=lambda x: x["evidence_relevance_score"], reverse=True)
+        # Search engines can return results matching a short ticker without
+        # actually referring to the discovered company. Such results must not
+        # enter the evidence pool.
+        if candidate["entity_relevance"] > 0:
+            candidates.append(candidate)
+
+    return sorted(
+        candidates,
+        key=lambda x: x["evidence_relevance_score"],
+        reverse=True,
+    )
 
 
 def consolidate_evidence(candidates: list[dict]) -> dict:
