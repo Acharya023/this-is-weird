@@ -116,9 +116,11 @@ def infer_event_type(text: str) -> str:
             ("stake sold", 5), ("sold stake", 5),
         ],
         "policy_event": [
-            ("gst", 5), ("tax cut", 5), ("government policy", 5),
-            ("policy announcement", 5), ("policy reform", 5),
-            ("regulatory change", 4), ("government decision", 4),
+            ("gst", 5), ("gst reform", 5), ("tax cut", 5),
+            ("tax reform", 5), ("tax restructuring", 5),
+            ("government policy", 5), ("policy announcement", 5),
+            ("policy reform", 5), ("regulatory change", 4),
+            ("government decision", 4),
         ],
         "corporate_action": [
             ("demerger", 5), ("rights issue", 5), ("buyback", 5),
@@ -132,8 +134,9 @@ def infer_event_type(text: str) -> str:
         ],
         "business_update": [
             ("business update", 5), ("sales update", 5),
-            ("operational update", 5), ("sales rose", 2),
-            ("sales grew", 2),
+            ("operational update", 5), ("q1 update", 5),
+            ("q2 update", 5), ("q3 update", 5), ("q4 update", 5),
+            ("sales rose", 2), ("sales grew", 2),
         ],
         "analyst_research": [
             ("analyst", 4), ("brokerage", 4), ("target price", 5),
