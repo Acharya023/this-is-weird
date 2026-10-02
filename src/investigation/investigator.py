@@ -27,6 +27,35 @@ def build_investigation_result(
     else:
         status = "unclear"
 
+    event_priority = {
+        "earnings": 8,
+        "guidance": 7,
+        "block_trade": 7,
+        "corporate_action": 6,
+        "business_update": 5,
+        "policy_event": 4,
+        "analyst_research": 3,
+        "sector_event": 2,
+        "macro_event": 1,
+        "unknown": 0,
+    }
+
+    event_candidates = [
+        c for c in candidates
+        if c.get("event_type") and c.get("event_type") != "unknown"
+    ]
+    inferred_event = (
+        max(
+            event_candidates,
+            key=lambda c: (
+                event_priority.get(c["event_type"], 0),
+                c["evidence_relevance_score"],
+            ),
+        )["event_type"]
+        if event_candidates
+        else (best["event_type"] if best else None)
+    )
+
     return {
         "date": target["anomaly_date"],
         "symbol": target["symbol"],
@@ -37,7 +66,7 @@ def build_investigation_result(
         "direction_conflicts": consolidated["direction_conflicts"],
         "evidence_strength": strength,
         "evidence_status": status,
-        "best_event_type": best["event_type"] if best else None,
+        "best_event_type": inferred_event,
         "best_headline": best["headline"] if best else None,
         "best_source": best["source_name"] if best else None,
         "best_source_url": best["source_url"] if best else None,
