@@ -16,6 +16,7 @@ def investigation_queries(symbol: str, event_date: date) -> list[str]:
 
     return [
         f"{symbol} {date_text}",
+        f"{symbol} {date_text} why shares",
         f"{symbol} {month_text} {year_text} news",
         f"{symbol} {month_text} {year_text} event",
     ]
