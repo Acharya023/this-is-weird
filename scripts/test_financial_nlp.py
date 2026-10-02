@@ -1,12 +1,4 @@
-"""Fast, reproducible financial NLP model benchmark.
-
-Unlike the original semantic investigation test, this script does NOT query
-Google News. It uses six fixed representative financial-news texts so that
-model quality and inference time can be measured without network/search cost.
-
-Run from the repository root:
-    python scripts/test_financial_nlp.py
-"""
+""""Fast, reproducible financial NLP benchmark."""
 
 from pathlib import Path
 import sys
@@ -67,6 +59,14 @@ def print_entities(entities):
         )
 
 
+def print_facts(facts):
+    for fact in facts:
+        print(
+            f"  FACT   | {fact['label']:15} | {fact['text']} "
+            f"| score={fact['score']:.3f}"
+        )
+
+
 def print_events(events):
     if not events:
         print("  EVENT  | none above threshold")
@@ -79,16 +79,13 @@ def print_events(events):
 
 
 def main():
-    print("FAST FINANCIAL NLP TEST")
+    print("SMALL FINANCIAL NLP TEST")
     print(f"Samples: {len(SAMPLES)}")
     print("No Google News requests are made.")
     print()
 
     timings = {}
-
-    start = time.perf_counter()
     analyzer = FinancialNLPAnalyzer(enable_sentiment=True)
-    print(f"Analyzer initialized in {time.perf_counter() - start:.2f}s")
 
     for sample in SAMPLES:
         print("\n" + "=" * 90)
@@ -102,8 +99,15 @@ def main():
         entities = analyzer.extract_entities(text)
         elapsed = time.perf_counter() - start
         timings.setdefault("NER", []).append(elapsed)
-        print(f"NER time: {elapsed:.2f}s")
+        print(f"Company NER time: {elapsed:.2f}s")
         print_entities(entities)
+
+        start = time.perf_counter()
+        facts = analyzer.extract_financial_facts(text)
+        elapsed = time.perf_counter() - start
+        timings.setdefault("FACTS", []).append(elapsed)
+        print(f"Financial facts time: {elapsed:.4f}s")
+        print_facts(facts)
 
         start = time.perf_counter()
         events = analyzer.detect_events(text)
@@ -129,8 +133,10 @@ def main():
             f"{stage:10} total={sum(values):.2f}s "
             f"avg={sum(values) / len(values):.2f}s"
         )
-    print("\nModel downloads are cached by Hugging Face for subsequent runs.")
+    print("\nThe large GLiNER dependency is no longer required.")
+    print("Hugging Face model weights remain cached after the first download.")
 
 
 if __name__ == "__main__":
     main()
+"
