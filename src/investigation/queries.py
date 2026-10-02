@@ -4,13 +4,13 @@ from datetime import date
 
 
 def investigation_queries(symbol: str, event_date: date) -> list[str]:
-    """Return targeted queries for a market anomaly."""
+    """Return broad queries; evidence logic performs date/relevance filtering."""
     date_text = event_date.strftime("%d %B %Y")
     month_text = event_date.strftime("%B %Y")
 
     return [
-        f'"{symbol}" "{date_text}" stock',
-        f'"{symbol}" "{date_text}" results announcement',
+        f'"{symbol}" "{date_text}"',
+        f'"{symbol}" "{month_text}" results OR earnings OR announcement',
     ]
 
 
