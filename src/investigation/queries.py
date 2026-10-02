@@ -14,10 +14,12 @@ def investigation_queries(symbol: str, event_date: date) -> list[str]:
     month_text = event_date.strftime("%B %Y")
     year_text = event_date.strftime("%Y")
 
+    company = COMPANY_QUERY_ALIASES.get(symbol.upper(), symbol)
+
     return [
-        f"{symbol} {date_text}",
+        f"{company} {date_text}",
         f"{symbol} {date_text} why shares",
-        f"{symbol} {month_text} {year_text} news",
+        f"{company} {month_text} {year_text} news",
         f"{symbol} {month_text} {year_text} event",
     ]
 
