@@ -4,13 +4,20 @@ from datetime import date
 
 
 def investigation_queries(symbol: str, event_date: date) -> list[str]:
-    """Return broad queries; evidence logic performs date/relevance filtering."""
+    """Return several broad historical queries.
+
+    Search providers may rank current pages above historical event coverage,
+    so we deliberately vary the query instead of relying on one exact phrase.
+    The evidence layer performs the final date/relevance filtering.
+    """
     date_text = event_date.strftime("%d %B %Y")
     month_text = event_date.strftime("%B %Y")
+    year_text = event_date.strftime("%Y")
 
     return [
-        f'"{symbol}" "{date_text}"',
-        f'"{symbol}" "{month_text}" results OR earnings OR announcement',
+        f"{symbol} {date_text}",
+        f"{symbol} {month_text} {year_text} Q1 results",
+        f"{symbol} {month_text} {year_text} earnings",
     ]
 
 
