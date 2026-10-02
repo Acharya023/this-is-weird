@@ -1,15 +1,17 @@
-"""Bootstrap a bounded NSE history from the Hugging Face indian-markets dataset.
+"""Bootstrap a bounded NSE history from Hugging Face Parquet.
 
-This deliberately stores only the configured symbols and date window in SQLite.
-The full Hugging Face dataset is never copied into the repository.
+The source dataset is partitioned by exchange/year. We download only the
+requested yearly files, filter to the configured symbols, and write the
+bounded result into SQLite. The full HF dataset is never copied into the repo.
 """
 
 import sqlite3
 import sys
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
-from datasets import load_dataset
+import polars as pl
+from huggingface_hub import hf_hub_download
 
 ROOT = Path(__file__).resolve().parents[2]
 DB = ROOT / "data" / "market.sqlite"
@@ -25,76 +27,107 @@ def symbols():
     }
 
 
+def years_to_load(years: int):
+    end_year = date.today().year
+    return range(end_year - years + 1, end_year + 1)
+
+
+def load_year(year: int, wanted: set[str], conn: sqlite3.Connection) -> int:
+    path = hf_hub_download(
+        repo_id="tejhq/indian-markets",
+        filename=f"nse/year={year}/nse_{year}.parquet",
+        repo_type="dataset",
+    )
+
+    df = (
+        pl.scan_parquet(path)
+        .filter(
+            pl.col("symbol").is_in(sorted(wanted))
+            & (pl.col("series") == "EQ")
+        )
+        .select(
+            "symbol",
+            "series",
+            "date",
+            "prev_close",
+            "open",
+            "high",
+            "low",
+            "last",
+            "close",
+            "volume",
+            "turnover",
+            "trades",
+        )
+        .collect()
+    )
+
+    rows = [
+        (
+            row["symbol"],
+            row["series"],
+            row["date"].isoformat(),
+            row["prev_close"],
+            row["open"],
+            row["high"],
+            row["low"],
+            row["last"],
+            row["close"],
+            None,
+            row["volume"],
+            row["turnover"],
+            row["trades"],
+        )
+        for row in df.iter_rows(named=True)
+    ]
+
+    conn.executemany(
+        """INSERT OR REPLACE INTO market_daily
+        (symbol, series, trade_date, prev_close, open, high, low,
+         last_price, close, vwap, volume, turnover, trades)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        rows,
+    )
+    conn.commit()
+
+    print(f"{year}: selected {len(rows):,} rows")
+    return len(rows)
+
+
 def main(years: int = 5):
-    end = date.today()
-    start = end - timedelta(days=365 * years)
+    if years < 1:
+        raise SystemExit("years must be >= 1")
+
     wanted = symbols()
+    if not wanted:
+        raise SystemExit("No symbols configured in config/bootstrap_symbols.txt")
 
     DB.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB)
     conn.executescript(SCHEMA.read_text())
 
-    # Streaming prevents the full HF dataset from being materialized locally.
-    ds = load_dataset(
-        "tejhq/indian-markets",
-        "nse",
-        split="train",
-        streaming=True,
-    )
+    total_inserted = 0
 
-    inserted = 0
-    scanned = 0
+    try:
+        for year in years_to_load(years):
+            total_inserted += load_year(year, wanted, conn)
 
-    for row in ds:
-        scanned += 1
-        symbol = str(row["symbol"]).upper()
-
-        if symbol not in wanted:
-            continue
-
-        d = row["date"]
-        if hasattr(d, "isoformat"):
-            d = d.isoformat()
-        else:
-            d = str(d)
-
-        if not (start.isoformat() <= d <= end.isoformat()):
-            continue
-
-        conn.execute(
-            """INSERT OR REPLACE INTO market_daily
-            (symbol, series, trade_date, prev_close, open, high, low,
-             last_price, close, vwap, volume, turnover, trades)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                symbol,
-                str(row.get("series") or "EQ"),
-                d,
-                row.get("prev_close"),
-                row["open"],
-                row["high"],
-                row["low"],
-                row.get("last"),
-                row["close"],
-                None,
-                row.get("volume"),
-                row.get("turnover"),
-                row.get("trades"),
-            ),
-        )
-        inserted += 1
-
-        if inserted % 5000 == 0:
-            conn.commit()
-            print(f"Inserted {inserted:,} rows; scanned {scanned:,}")
-
-    conn.commit()
-    total = conn.execute("SELECT COUNT(*) FROM market_daily").fetchone()[0]
-    conn.close()
+        total = conn.execute(
+            "SELECT COUNT(*) FROM market_daily"
+        ).fetchone()[0]
+        symbols_loaded = conn.execute(
+            "SELECT COUNT(DISTINCT symbol) FROM market_daily"
+        ).fetchone()[0]
+        date_range = conn.execute(
+            "SELECT MIN(trade_date), MAX(trade_date) FROM market_daily"
+        ).fetchone()
+    finally:
+        conn.close()
 
     print(
-        f"Bootstrap complete: inserted {inserted:,} rows; "
-        f"database total is {total:,} rows."
+        f"Bootstrap complete: inserted {total_inserted:,} rows; "
+        f"database contains {total:,} rows across {symbols_loaded} symbols; "
+        f"date range {date_range[0]} to {date_range[1]}."
     )
 
 
