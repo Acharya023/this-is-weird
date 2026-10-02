@@ -11,6 +11,7 @@ from src.investigation.evidence import (
     source_family,
     source_quality,
     infer_event_type,
+    entity_relevance,
 )
 
 
@@ -62,6 +63,58 @@ class EvidenceTests(unittest.TestCase):
     def test_normalized_publisher_quality_is_consistent(self):
         self.assertEqual(source_quality("Mint"), 0.85)
         self.assertEqual(source_quality("Livemint.com"), 0.85)
+
+
+    def test_unrelated_short_symbol_result_has_no_entity_relevance(self):
+        self.assertEqual(
+            entity_relevance(
+                "LT",
+                "Impact of local therapy in metastatic renal cell carcinoma",
+                "A retrospective medical analysis.",
+            ),
+            0.0,
+        )
+
+    def test_company_name_matches_entity(self):
+        self.assertEqual(
+            entity_relevance(
+                "LT",
+                "Larsen & Toubro shares rise after strong results",
+                "",
+            ),
+            1.0,
+        )
+
+    def test_unrelated_results_are_removed_from_search_evidence(self):
+        from src.investigation.evidence import build_search_evidence
+
+        candidates = build_search_evidence(
+            {
+                "symbol": "LT",
+                "anomaly_date": date(2025, 7, 30),
+                "daily_return": 0.048,
+            },
+            [
+                {
+                    "title": "Impact of local therapy in metastatic renal cell carcinoma",
+                    "text": "A retrospective medical analysis.",
+                    "published_date": "2025-07-30",
+                    "url": "https://www.nature.com/example",
+                    "source_name": "Nature",
+                    "event_type": None,
+                },
+                {
+                    "title": "Larsen & Toubro shares rise after Q1 results",
+                    "text": "L&T reported strong quarterly results.",
+                    "published_date": "2025-07-30",
+                    "url": "https://www.reuters.com/example",
+                    "source_name": "Reuters",
+                    "event_type": None,
+                },
+            ],
+        )
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["source_name"], "Reuters")
 
     def test_event_groups_choose_catalyst(self):
         candidates = [
