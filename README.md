@@ -1,36 +1,49 @@
 # This Is Weird — Market Edition
 
-The first version of **This Is Weird** focuses on discovering statistically unusual events in Indian market data.
+The first version of **This Is Weird** discovers statistically unusual events in Indian market data.
 
-## Architecture
+## Data architecture
 
-- **GitHub:** source code, configuration and documentation only.
-- **SQLite:** generated market history and derived data.
-- **NSE:** primary source for historical daily equity data.
-- **Anomaly detector:** will identify unusual moves without being told which stock/event to look for.
+- **GitHub:** source code, configuration and documentation.
+- **SQLite:** bounded local/generated market history.
+- **Historical bootstrap:** Hugging Face `tejhq/indian-markets`, whose NSE subset is built from official exchange bhavcopy data and refreshed daily.
+- **Ongoing source:** NSE official reports.
+- **Anomaly detector:** numerical/statistical detection first; investigation/explanation later.
 
-## First-stage data
+We intentionally do **not** copy the full Hugging Face dataset or SQLite database into Git.
 
-Daily security-level data:
+## First-stage scope
+
+The bootstrap starts with 20 liquid/NIFTY-50 exploration symbols and a five-year window. This keeps the first experiment small enough to inspect while giving the detector enough history to establish normal behavior.
+
+The stored daily fields are:
 
 - Symbol
 - Series
 - Trade date
 - Previous close
 - Open / High / Low / Close
-- VWAP
-- Total traded quantity
+- Last price
+- Volume
 - Turnover
 - Number of trades
 
-## Storage rule
+VWAP is left empty in the Hugging Face bootstrap because that dataset's published NSE schema does not expose VWAP. The later NSE ingestion path can populate it.
 
-Raw market data and the SQLite database are generated artifacts. They must **not** be committed to Git.
+## Bootstrap
 
-## Load an NSE CSV
+Install dependencies:
 
 ```bash
-python src/ingestion/nse_to_sqlite.py path/to/nse.csv
+pip install -r requirements.txt
 ```
 
-The next milestone is to load real NSE history and test whether the detector finds genuinely interesting anomalies rather than ordinary large moves.
+Then:
+
+```bash
+python src/ingestion/bootstrap_hf.py 5
+```
+
+The argument is the number of years to retain. The default is 5.
+
+The next milestone is to calculate returns, rolling volatility and relative volume, then see whether the detector finds genuinely interesting anomalies.
