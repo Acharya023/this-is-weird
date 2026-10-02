@@ -4,6 +4,7 @@ import unittest
 from datetime import date
 
 from src.investigation.runner import investigate_with_provider
+from src.investigation.queries import investigation_queries
 
 
 class FakeProvider:
@@ -18,6 +19,11 @@ class FakeProvider:
 
 
 class RunnerTests(unittest.TestCase):
+    def test_short_ticker_uses_company_name_in_search(self):
+        queries = investigation_queries("LT", date(2025, 7, 30))
+        self.assertIn("Larsen & Toubro", queries[0])
+        self.assertIn("Larsen & Toubro", queries[2])
+
     def test_runner_uses_provider_and_event_pipeline(self):
         row = {
             "symbol": "KOTAKBANK",
