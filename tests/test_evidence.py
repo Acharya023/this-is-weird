@@ -5,6 +5,7 @@ from datetime import date
 
 from src.investigation.evidence import (
     build_evidence_candidate,
+    build_event_groups,
     calculate_evidence_strength,
     consolidate_evidence,
     source_family,
@@ -17,137 +18,73 @@ class EvidenceTests(unittest.TestCase):
 
     def test_same_day_matching_event_scores_strongly(self):
         candidate = build_evidence_candidate(
-            symbol="MARUTI",
-            anomaly_date=date(2025, 8, 18),
-            stock_return=0.0875,
-            event_date=date(2025, 8, 18),
-            event_type="policy_event",
-            headline="Maruti shares rally on GST cuts",
-            summary="Auto stocks rose sharply.",
-            source_name="Reuters",
-            source_url="https://www.reuters.com/example",
+            "MARUTI", date(2025, 8, 18), 0.0875, date(2025, 8, 18),
+            "policy_event", "Maruti shares rally on GST cuts",
+            "Auto stocks rose sharply.", "Reuters",
+            "https://www.reuters.com/example",
         )
-
         self.assertTrue(candidate["direction_matches"])
         self.assertGreater(candidate["evidence_relevance_score"], 0.85)
 
     def test_reuters_syndication_is_one_source_family(self):
         candidates = [
-            build_evidence_candidate(
-                "MARUTI",
-                date(2025, 8, 18),
-                0.08,
-                date(2025, 8, 18),
-                "policy_event",
-                "Maruti rallies",
-                "GST reform boosts autos",
-                "Reuters",
-                "https://www.reuters.com/example",
-            ),
-            build_evidence_candidate(
-                "MARUTI",
-                date(2025, 8, 18),
-                0.08,
-                date(2025, 8, 18),
-                "policy_event",
-                "Maruti rallies",
-                "GST reform boosts autos",
-                "Yahoo Finance",
-                "https://finance.yahoo.com/example",
-            ),
-            build_evidence_candidate(
-                "MARUTI",
-                date(2025, 8, 18),
-                0.08,
-                date(2025, 8, 18),
-                "policy_event",
-                "Auto stocks rally",
-                "GST reform boosts autos",
-                "Moneycontrol",
-                "https://www.moneycontrol.com/example",
-            ),
+            build_evidence_candidate("MARUTI", date(2025, 8, 18), 0.08, date(2025, 8, 18), "policy_event", "Maruti rallies", "GST reform boosts autos", "Reuters", "https://www.reuters.com/example"),
+            build_evidence_candidate("MARUTI", date(2025, 8, 18), 0.08, date(2025, 8, 18), "policy_event", "Maruti rallies", "GST reform boosts autos", "Yahoo Finance", "https://finance.yahoo.com/example"),
+            build_evidence_candidate("MARUTI", date(2025, 8, 18), 0.08, date(2025, 8, 18), "policy_event", "Auto stocks rally", "GST reform boosts autos", "Moneycontrol", "https://www.moneycontrol.com/example"),
         ]
-
         consolidated = consolidate_evidence(candidates)
-
-        self.assertEqual(
-            consolidated["independent_source_count"],
-            2,
-        )
-        self.assertEqual(
-            consolidated["direction_matches"],
-            2,
-        )
-
-        strength = calculate_evidence_strength(consolidated)
-        self.assertGreater(strength, 0.80)
+        self.assertEqual(consolidated["independent_source_count"], 2)
+        self.assertEqual(consolidated["direction_matches"], 2)
+        self.assertGreater(calculate_evidence_strength(consolidated), 0.80)
 
     def test_common_publisher_aliases_share_a_family(self):
-        self.assertEqual(
-            source_family("https://www.livemint.com/example", "Mint"),
-            "livemint",
-        )
-        self.assertEqual(
-            source_family("https://www.livemint.com/example", "Livemint.com"),
-            "livemint",
-        )
+        self.assertEqual(source_family("https://www.livemint.com/example", "Mint"), "livemint")
+        self.assertEqual(source_family("https://www.livemint.com/example", "Livemint.com"), "livemint")
 
     def test_yahoo_is_not_assumed_to_be_reuters(self):
-        self.assertEqual(
-            source_family(
-                "https://finance.yahoo.com/example",
-                "Yahoo Finance",
-            ),
-            "finance.yahoo.com",
-        )
+        self.assertEqual(source_family("https://finance.yahoo.com/example", "Yahoo Finance"), "finance.yahoo.com")
 
     def test_reuters_attribution_on_yahoo_is_grouped(self):
-        self.assertEqual(
-            source_family(
-                "https://finance.yahoo.com/example",
-                "Reuters",
-            ),
-            "reuters",
-        )
+        self.assertEqual(source_family("https://finance.yahoo.com/example", "Reuters"), "reuters")
 
     def test_distinctive_event_terms_beat_generic_financial_language(self):
-        self.assertEqual(
-            infer_event_type(
-                "Maruti shares surge after GST tax cut. "
-                "The company also reported quarterly profit and revenue."
-            ),
-            "policy_event",
-        )
+        self.assertEqual(infer_event_type("Maruti shares surge after GST tax cut. The company also reported quarterly profit and revenue."), "policy_event")
 
     def test_generic_profit_language_is_not_automatically_earnings(self):
-        self.assertEqual(
-            infer_event_type(
-                "Shares rise after a policy announcement. "
-                "The article compares last quarter profit and revenue."
-            ),
-            "policy_event",
-        )
+        self.assertEqual(infer_event_type("Shares rise after a policy announcement. The article compares last quarter profit and revenue."), "policy_event")
 
     def test_results_phrase_identifies_earnings(self):
-        self.assertEqual(
-            infer_event_type(
-                "Company quarterly results beat analyst estimates."
-            ),
-            "earnings",
-        )
+        self.assertEqual(infer_event_type("Company quarterly results beat analyst estimates."), "earnings")
 
     def test_block_trade_beats_background_earnings_language(self):
-        self.assertEqual(
-            infer_event_type(
-                "Shares fall after a block deal. "
-                "The article also discusses the company's profit."
-            ),
-            "block_trade",
-        )
+        self.assertEqual(infer_event_type("Shares fall after a block deal. The article also discusses the company's profit."), "block_trade")
 
     def test_normalized_publisher_quality_is_consistent(self):
         self.assertEqual(source_quality("Mint"), 0.85)
         self.assertEqual(source_quality("Livemint.com"), 0.85)
+
+    def test_event_groups_choose_catalyst(self):
+        candidates = [
+            build_evidence_candidate("MARUTI", date(2025, 8, 18), 0.08, date(2025, 8, 18), "policy_event", "Maruti rallies on GST reform", "GST cuts boost autos", "Reuters", "https://www.reuters.com/a"),
+            build_evidence_candidate("MARUTI", date(2025, 8, 18), 0.08, date(2025, 8, 18), "policy_event", "Auto stocks jump after tax cut", "GST reform boosts demand", "Moneycontrol", "https://www.moneycontrol.com/b"),
+            build_evidence_candidate("MARUTI", date(2025, 8, 18), 0.08, date(2025, 8, 18), "earnings", "Maruti profit update", "Quarterly profit is discussed", "Economic Times", "https://economictimes.indiatimes.com/c"),
+        ]
+        groups = build_event_groups(candidates)
+        self.assertEqual(groups[0]["event_type"], "policy_event")
+        self.assertEqual(groups[0]["independent_source_count"], 2)
+
+    def test_event_group_score_is_capped(self):
+        candidates = [
+            build_evidence_candidate(
+                "KOTAKBANK", date(2025, 7, 28), -0.07, date(2025, 7, 28),
+                "earnings", "Kotak earnings", "weak quarterly results",
+                "Publisher" + str(i), "https://publisher" + str(i) + ".example/a",
+            )
+            for i in range(10)
+        ]
+        groups = build_event_groups(candidates)
+        self.assertEqual(groups[0]["event_type"], "earnings")
+        self.assertLessEqual(groups[0]["score"], 1.0)
 
 
 if __name__ == "__main__":
