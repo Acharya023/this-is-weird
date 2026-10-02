@@ -339,12 +339,19 @@ def build_event_groups(candidates: list[dict]) -> list[dict]:
             if top else 0.0
         )
 
+        specificity = event_specificity(event_type)
+
+        # Generic/unknown articles are useful fallback evidence, but a large
+        # number of them must not outrank a smaller set of specific catalyst
+        # evidence. Source-family diversity therefore gets less weight than
+        # catalyst specificity.
         group_score = min(
-            0.40 * best_score
+            0.35 * best_score
             + 0.20 * mean_top_score
             + 0.15 * temporal_fit
             + 0.15 * direction_agreement
-            + 0.10 * family_diversity,
+            + 0.05 * family_diversity
+            + 0.10 * specificity,
             1.0,
         )
 
@@ -357,6 +364,7 @@ def build_event_groups(candidates: list[dict]) -> list[dict]:
             "direction_matches": matches,
             "direction_conflicts": conflicts,
             "direction_agreement": direction_agreement,
+            "event_specificity": specificity,
             "best_candidate": independent[0] if independent else None,
             "evidence_candidates": independent[:5],
         })
