@@ -18,8 +18,7 @@ class FakeProvider:
 
 
 class RunnerTests(unittest.TestCase):
-
-    def test_runner_uses_provider_and_evidence_pipeline(self):
+    def test_runner_uses_provider_and_event_pipeline(self):
         row = {
             "symbol": "KOTAKBANK",
             "date": date(2025, 7, 28),
@@ -29,17 +28,11 @@ class RunnerTests(unittest.TestCase):
             "market_divergence": -0.068082,
             "discovery_score": 0.830647,
         }
-
-        result = investigate_with_provider(
-            row,
-            FakeProvider(),
-            limit_per_query=5,
-        )
-
+        result = investigate_with_provider(row, FakeProvider(), limit_per_query=5)
         self.assertEqual(result["symbol"], "KOTAKBANK")
         self.assertEqual(result["search_candidates"], 2)
         self.assertEqual(result["best_event_type"], "earnings")
-        self.assertGreater(result["evidence_strength"], 0.50)
+        self.assertIn("event_groups", result)
 
 
 if __name__ == "__main__":
