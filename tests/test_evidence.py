@@ -7,6 +7,8 @@ from src.investigation.evidence import (
     build_evidence_candidate,
     calculate_evidence_strength,
     consolidate_evidence,
+    source_family,
+    source_quality,
 )
 
 
@@ -78,6 +80,36 @@ class EvidenceTests(unittest.TestCase):
 
         strength = calculate_evidence_strength(consolidated)
         self.assertGreater(strength, 0.80)
+
+    def test_common_publisher_aliases_share_a_family(self):
+        self.assertEqual(
+            source_family("https://www.livemint.com/example", "Mint"),
+            "livemint",
+        )
+        self.assertEqual(
+            source_family("https://www.livemint.com/example", "Livemint.com"),
+            "livemint",
+        )
+
+    def test_known_reuters_aliases_share_a_family(self):
+        self.assertEqual(
+            source_family(
+                "https://finance.yahoo.com/example",
+                "Yahoo Finance",
+            ),
+            "reuters",
+        )
+        self.assertEqual(
+            source_family(
+                "https://sg.finance.yahoo.com/example",
+                "Yahoo Finance",
+            ),
+            "reuters",
+        )
+
+    def test_normalized_publisher_quality_is_consistent(self):
+        self.assertEqual(source_quality("Mint"), 0.85)
+        self.assertEqual(source_quality("Livemint.com"), 0.85)
 
 
 if __name__ == "__main__":
