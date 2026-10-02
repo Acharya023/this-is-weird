@@ -117,8 +117,8 @@ def infer_event_type(text: str) -> str:
         ],
         "policy_event": [
             ("gst", 5), ("tax cut", 5), ("government policy", 5),
-            ("policy reform", 5), ("regulatory change", 4),
-            ("government decision", 4),
+            ("policy announcement", 5), ("policy reform", 5),
+            ("regulatory change", 4), ("government decision", 4),
         ],
         "corporate_action": [
             ("demerger", 5), ("rights issue", 5), ("buyback", 5),
@@ -219,12 +219,16 @@ def evidence_relevance_score(candidate: dict) -> float:
         else 0.00 if candidate["direction_matches"] is False
         else 0.50
     )
+    # Entity relevance is a gate at the search-result boundary, not part of
+    # the low-level candidate score. This keeps direct candidate construction
+    # useful for grouping/testing while build_search_evidence still rejects
+    # unrelated search hits (for example, LT vs. medical "local therapy").
     return (
         candidate["temporal_relevance"] * 0.40
         + direction * 0.25
         + candidate["source_quality"] * 0.20
         + candidate["event_specificity"] * 0.15
-    ) * candidate["entity_relevance"]
+    )
 
 
 def build_evidence_candidate(
