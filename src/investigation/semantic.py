@@ -1,36 +1,95 @@
-"""Semantic financial NLP for investigation evidence.
+""""Semantic financial NLP for investigation evidence.
 
 The deterministic investigation layer finds unusual market behaviour.
-This module provides a separate NLP layer that interprets financial text.
+This module interprets financial text without making model output the final
+truth. The NLP layer combines a small Indian-financial company NER model with
+deterministic extraction of financial facts, a financial event classifier, and
+FinBERT sentiment.
 
 Models:
-- Indian-financial GLiNER: entity/event-signal extraction.
+- Indian financial company NER: small BERT token classifier.
 - FinDeBERTa: multi-label financial event detection.
 - FinBERT: financial sentiment baseline.
 
-No model output is treated as ground truth. Deterministic verification remains
-outside this module.
+Deterministic verification remains outside this module.
 """
 
 from dataclasses import dataclass, field
+import re
 from typing import Any
 
 
-GLINER_MODEL = "techkiyan/indian-financial-news-ner-gliner-v1"
+NER_MODEL = "ritam-m/bert-base-company-ner"
 EVENT_MODEL = "ritessshhh/FinDeBERTa"
 SENTIMENT_MODEL = "ProsusAI/finbert"
 
-GLINER_LABELS = [
-    "company",
-    "index",
-    "organization",
-    "person",
-    "amount",
-    "percentage",
-    "date",
-    "financial_term",
-    "event_signal",
-    "sector",
+# Kept as a compatibility alias for callers that used the old constant.
+GLINER_MODEL = NER_MODEL
+
+FINANCIAL_FACT_PATTERNS = {
+    "percentage": [
+        r"(?<!\\w)(?:\\d+(?:\\.\\d+)?|\\.\\d+)\\s*%",
+        r"(?<!\\w)(?:\\d+(?:\\.\\d+)?)\\s*percent\\b",
+    ],
+    "amount": [
+        r"(?<!\\w)₹\\s*[\\d,.]+(?:\\s*(?:crore|cr|lakh|million|billion))?",
+        r"(?<!\\w)\\$\\s*[\\d,.]+(?:\\s*(?:million|billion))?",
+        r"(?<!\\w)[\\d,.]+\\s*(?:crore|cr|lakh|million|billion)\\b",
+    ],
+    "date": [
+        r"\\b(?:Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)\\s+\\d{1,2}(?:,\\s*\\d{4})?\\b",
+        r"\\b\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}\\b",
+    ],
+}
+
+EVENT_SIGNAL_PATTERNS = [
+    "block deal",
+    "bulk deal",
+    "stake sale",
+    "stake sold",
+    "sold stake",
+    "guidance",
+    "outlook",
+    "forecast",
+    "raised guidance",
+    "cut guidance",
+    "lowered guidance",
+    "earnings",
+    "quarterly results",
+    "q1 results",
+    "q2 results",
+    "q3 results",
+    "q4 results",
+    "business update",
+    "sales update",
+    "demerger",
+    "rights issue",
+    "buyback",
+    "bonus issue",
+    "stock split",
+    "dividend",
+    "gst reform",
+    "tax reform",
+    "policy announcement",
+    "regulatory change",
+]
+
+FINANCIAL_TERM_PATTERNS = [
+    "revenue",
+    "profit",
+    "net profit",
+    "ebitda",
+    "margin",
+    "aum",
+    "nim",
+    "nii",
+    "bad loans",
+    "credit costs",
+    "asset quality",
+    "target price",
+    "price target",
+    "stake",
+    "shares",
 ]
 
 EVENT_TYPE_MAP = {
@@ -51,7 +110,6 @@ EVENT_TYPE_MAP = {
     "CSR/Brand": "business_update",
 }
 
-# Kept for backwards compatibility with the earlier zero-shot experiment.
 EVENT_LABELS = [
     "earnings or quarterly results",
     "management guidance or forecast",
@@ -88,24 +146,23 @@ class SemanticAnalysis:
 
 @dataclass
 class FinancialNLPAnalysis:
-    """Structured output from the new financial NLP layer."""
-
     entities: list[dict] = field(default_factory=list)
     event_labels: list[dict] = field(default_factory=list)
     mapped_event_types: list[str] = field(default_factory=list)
+    financial_facts: list[dict] = field(default_factory=list)
     sentiment: str | None = None
     sentiment_confidence: float | None = None
 
 
 class FinancialNLPAnalyzer:
-    """Run the financial NER, event classifier and optional FinBERT baseline."""
+    """Run financial entity/fact extraction, events and sentiment."""
 
     def __init__(
         self,
         ner_model: Any | None = None,
         event_model: Any | None = None,
         sentiment_classifier: Any | None = None,
-        ner_model_name: str = GLINER_MODEL,
+        ner_model_name: str = NER_MODEL,
         event_model_name: str = EVENT_MODEL,
         sentiment_model_name: str = SENTIMENT_MODEL,
         enable_sentiment: bool = True,
@@ -127,9 +184,13 @@ class FinancialNLPAnalyzer:
 
     def _load_ner_model(self):
         if self._ner_model is None:
-            from gliner import GLiNER
+            from transformers import pipeline
 
-            self._ner_model = GLiNER.from_pretrained(self.ner_model_name)
+            self._ner_model = pipeline(
+                "ner",
+                model=self.ner_model_name,
+                aggregation_strategy="first",
+            )
         return self._ner_model
 
     def _load_event_model(self):
@@ -152,11 +213,67 @@ class FinancialNLPAnalyzer:
             )
         return self._sentiment_classifier
 
+    @staticmethod
+    def _regex_facts(text: str) -> list[dict]:
+        facts = []
+        seen = set()
+
+        for label, patterns in FINANCIAL_FACT_PATTERNS.items():
+            for pattern in patterns:
+                for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+                    value = match.group(0).strip()
+                    key = (label, value.lower())
+                    if key not in seen:
+                        facts.append({"label": label, "text": value, "score": 1.0})
+                        seen.add(key)
+
+        lowered = text.lower()
+        for phrase in EVENT_SIGNAL_PATTERNS:
+            if phrase in lowered:
+                key = ("event_signal", phrase)
+                if key not in seen:
+                    facts.append({"label": "event_signal", "text": phrase, "score": 1.0})
+                    seen.add(key)
+
+        for phrase in FINANCIAL_TERM_PATTERNS:
+            if re.search(r"(?<!\\w)" + re.escape(phrase) + r"(?!\\w)", lowered):
+                key = ("financial_term", phrase)
+                if key not in seen:
+                    facts.append({"label": "financial_term", "text": phrase, "score": 1.0})
+                    seen.add(key)
+
+        return facts
+
     def extract_entities(self, text: str) -> list[dict]:
         if not text:
             return []
+
         model = self._load_ner_model()
-        return model.predict_entities(text, GLINER_LABELS, threshold=0.50)
+
+        # Keep the old fake-model contract used by unit tests.
+        if hasattr(model, "predict_entities"):
+            return model.predict_entities(
+                text,
+                ["company"],
+                threshold=0.50,
+            )
+
+        raw = model(text)
+        entities = []
+        for item in raw:
+            entities.append(
+                {
+                    "text": item.get("word", "").strip(),
+                    "label": str(item.get("entity_group", "entity")).lower(),
+                    "score": float(item.get("score", 0.0)),
+                }
+            )
+        return entities
+
+    def extract_financial_facts(self, text: str) -> list[dict]:
+        if not text:
+            return []
+        return self._regex_facts(text)
 
     def detect_events(self, text: str) -> list[dict]:
         if not text:
@@ -193,6 +310,7 @@ class FinancialNLPAnalyzer:
             return FinancialNLPAnalysis()
 
         entities = self.extract_entities(text)
+        facts = self.extract_financial_facts(text)
         event_labels = self.detect_events(text)
 
         sentiment = None
@@ -212,6 +330,7 @@ class FinancialNLPAnalyzer:
             entities=entities,
             event_labels=event_labels,
             mapped_event_types=mapped,
+            financial_facts=facts,
             sentiment=sentiment,
             sentiment_confidence=sentiment_confidence,
         )
@@ -283,3 +402,4 @@ class SemanticEvidenceAnalyzer:
             sentiment=sentiment,
             sentiment_confidence=sentiment_confidence,
         )
+"
