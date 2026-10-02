@@ -59,8 +59,9 @@ def infer_event_type(text: str) -> str:
     text = text.lower()
 
     if any(x in text for x in [
-        "quarterly results", "q1", "q2", "q3", "q4",
-        "profit", "revenue", "earnings",
+        "quarterly results", "quarterly result", "q1", "q2", "q3", "q4",
+        "profit", "revenue", "earnings", "net interest income",
+        "net interest margin", "nim", "provisions", "bad loans",
     ]):
         return "earnings"
     if any(x in text for x in [
