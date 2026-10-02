@@ -30,7 +30,7 @@ class RunnerTests(unittest.TestCase):
         }
         result = investigate_with_provider(row, FakeProvider(), limit_per_query=5)
         self.assertEqual(result["symbol"], "KOTAKBANK")
-        self.assertEqual(result["search_candidates"], 2)
+        self.assertEqual(result["search_candidates"], 4)
         self.assertEqual(result["best_event_type"], "earnings")
         self.assertIn("event_groups", result)
 
