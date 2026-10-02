@@ -84,11 +84,13 @@ class SemanticEvidenceAnalyzer:
 
     @staticmethod
     def _article_text(article: dict) -> str:
-        title = article.get("title", "")
-        text = article.get("text", "")
-        # Keep inference bounded while preserving the headline and opening
-        # portion, where news articles usually state the main event.
-        combined = f"{title}. {text}".strip()
+        title = str(article.get("title") or "").strip()
+        text = str(article.get("text") or "").strip()
+
+        # Build only from non-empty fields so a missing article does not
+        # become a synthetic "." and accidentally reach model inference.
+        parts = [part for part in (title, text) if part]
+        combined = ". ".join(parts)
         return combined[:6000]
 
     def analyze(self, article: dict) -> SemanticAnalysis:
