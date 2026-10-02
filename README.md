@@ -121,3 +121,19 @@ The next engineering milestone is to move from the 20-stock experiment toward a 
 7. Produce the first automated **This Is Weird** discovery record.
 
 The current Colab calculations are exploratory and should not yet be treated as the production detector.
+
+
+## Investigation architecture
+
+The project now separates anomaly detection from investigation.
+
+- `src/detection/anomaly_detector.py` contains reusable adjusted-price anomaly features and discovery scoring.
+- `src/investigation/queries.py` generates compact investigation queries.
+- `src/investigation/evidence.py` normalizes events, scores temporal/directional/source relevance, and removes obvious syndicated duplicates.
+- `src/investigation/investigator.py` provides provider-agnostic investigation orchestration.
+- `src/storage/discoveries.py` persists discoveries and evidence to SQLite.
+- `tests/test_evidence.py` covers the evidence layer.
+
+The search provider is deliberately not hard-coded into the investigator. This allows a self-hosted SearXNG backend (or another provider later) to supply search results without changing the evidence logic.
+
+Evidence strength measures support from available evidence; it is not a probability of causation.
