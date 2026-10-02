@@ -91,18 +91,20 @@ class EvidenceTests(unittest.TestCase):
             "livemint",
         )
 
-    def test_known_reuters_aliases_share_a_family(self):
+    def test_yahoo_is_not_assumed_to_be_reuters(self):
         self.assertEqual(
             source_family(
                 "https://finance.yahoo.com/example",
                 "Yahoo Finance",
             ),
-            "reuters",
+            "finance.yahoo.com",
         )
+
+    def test_reuters_attribution_on_yahoo_is_grouped(self):
         self.assertEqual(
             source_family(
-                "https://sg.finance.yahoo.com/example",
-                "Yahoo Finance",
+                "https://finance.yahoo.com/example",
+                "Reuters",
             ),
             "reuters",
         )
