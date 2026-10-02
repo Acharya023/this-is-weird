@@ -134,6 +134,14 @@ The project now separates anomaly detection from investigation.
 - `src/storage/discoveries.py` persists discoveries and evidence to SQLite.
 - `tests/test_evidence.py` covers the evidence layer.
 
-The search provider is deliberately not hard-coded into the investigator. This allows a self-hosted SearXNG backend (or another provider later) to supply search results without changing the evidence logic.
+The search provider is deliberately not hard-coded into the investigator. This allows different backends to supply search results without changing the evidence logic.
+
+Current providers:
+- `src/investigation/google_news.py` — Google News keyword-search RSS, requiring no API key. This is the preferred low-cost/no-token development provider for news/event investigation.
+- `src/investigation/searxng.py` — optional SearXNG JSON provider. Public SearXNG instances are not reliable enough to assume JSON access, so this remains configurable rather than being the default.
+
+The Google News provider is intentionally treated as a news-discovery source, not as proof by itself. The existing evidence layer still scores temporal relevance, direction, source quality and independent corroboration.
+
+Evidence strength measures support from available evidence; it is not a probability of causation.
 
 Evidence strength measures support from available evidence; it is not a probability of causation.
