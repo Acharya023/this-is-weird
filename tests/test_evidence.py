@@ -73,6 +73,40 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(groups[0]["event_type"], "policy_event")
         self.assertEqual(groups[0]["independent_source_count"], 2)
 
+    def test_specific_catalyst_beats_many_generic_articles(self):
+        candidates = [
+            *[
+                build_evidence_candidate(
+                    "KOTAKBANK", date(2025, 7, 28), -0.07,
+                    date(2025, 7, 28), "unknown",
+                    f"Kotak shares fall article {i}",
+                    "Markets were weak and shares declined.",
+                    f"Generic Publisher {i}",
+                    f"https://generic{i}.example/article",
+                )
+                for i in range(10)
+            ],
+            build_evidence_candidate(
+                "KOTAKBANK", date(2025, 7, 28), -0.07,
+                date(2025, 7, 28), "earnings",
+                "Kotak Q1 results disappoint",
+                "Quarterly results missed expectations.",
+                "Livemint",
+                "https://www.livemint.com/example",
+            ),
+            build_evidence_candidate(
+                "KOTAKBANK", date(2025, 7, 28), -0.07,
+                date(2025, 7, 28), "earnings",
+                "Kotak profit falls",
+                "Weak quarterly results pressure the stock.",
+                "Reuters",
+                "https://www.reuters.com/example",
+            ),
+        ]
+        groups = build_event_groups(candidates)
+        self.assertEqual(groups[0]["event_type"], "earnings")
+        self.assertGreater(groups[0]["score"], groups[1]["score"])
+
     def test_event_group_score_is_capped(self):
         candidates = [
             build_evidence_candidate(
