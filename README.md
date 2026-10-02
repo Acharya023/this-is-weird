@@ -14,7 +14,7 @@ We intentionally do **not** copy the full Hugging Face dataset or SQLite databas
 
 ## First-stage scope
 
-The bootstrap starts with 20 liquid/NIFTY-50 exploration symbols and a five-year window. This keeps the first experiment small enough to inspect while giving the detector enough history to establish normal behavior.
+The bootstrap starts with 20 exploration symbols and a five-year window. This keeps the first experiment small enough to inspect while giving the detector enough history to establish normal behavior.
 
 The stored daily fields are:
 
@@ -28,9 +28,13 @@ The stored daily fields are:
 - Turnover
 - Number of trades
 
-VWAP is left empty in the Hugging Face bootstrap because that dataset's published NSE schema does not expose VWAP. The later NSE ingestion path can populate it.
+VWAP is left empty in the Hugging Face bootstrap because the published NSE schema does not expose VWAP. The later NSE ingestion path can populate it.
 
-## Bootstrap
+## Efficient bootstrap
+
+The Hugging Face NSE data is partitioned into one Parquet rollup per year. The bootstrap therefore downloads only the requested yearly files, filters the configured symbols locally with Polars, and writes only that bounded slice into SQLite.
+
+This is much more efficient than streaming all ~7.2M NSE rows and discarding almost all of them.
 
 Install dependencies:
 
