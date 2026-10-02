@@ -6,6 +6,44 @@ from urllib.parse import urlparse
 DOMAIN_ALIASES = {
 }
 
+# Company names used to reject search results that only happen to contain a
+# short stock symbol (for example, LT) or otherwise refer to another entity.
+COMPANY_ALIASES = {
+    "ASIANPAINT": ["asian paints", "asian paint"],
+    "AXISBANK": ["axis bank"],
+    "BAJFINANCE": ["bajaj finance"],
+    "BHARTIARTL": ["bharti airtel", "airtel"],
+    "HCLTECH": ["hcltech", "hcl tech"],
+    "HDFCBANK": ["hdfc bank"],
+    "HINDUNILVR": ["hindustan unilever", "hul"],
+    "ICICIBANK": ["icici bank"],
+    "INFY": ["infosys"],
+    "KOTAKBANK": ["kotak mahindra bank", "kotak bank"],
+    "LT": ["larsen & toubro", "larsen and toubro", "l&t"],
+    "MARUTI": ["maruti suzuki", "maruti"],
+    "NTPC": ["ntpc"],
+    "ONGC": ["ongc", "oil and natural gas corporation"],
+    "RELIANCE": ["reliance industries", "reliance"],
+    "SBIN": ["state bank of india", "sbi"],
+    "SUNPHARMA": ["sun pharma", "sun pharmaceutical"],
+    "TCS": ["tata consultancy services", "tcs"],
+    "TITAN": ["titan company", "titan"],
+    "WIPRO": ["wipro"],
+}
+
+
+def entity_relevance(symbol: str, headline: str, summary: str) -> float:
+    """Measure whether evidence actually refers to the discovered company."""
+    text = f"{headline} {summary}".lower()
+    aliases = COMPANY_ALIASES.get(symbol.upper(), [symbol.lower()])
+    if any(alias in text for alias in aliases):
+        return 1.0
+    # Short symbols are especially prone to accidental matches. Do not give
+    # them partial credit unless the symbol itself is reasonably distinctive.
+    if len(symbol) >= 4 and symbol.lower() in text:
+        return 1.0
+    return 0.0
+
 PUBLISHER_ALIASES = {
     "mint": "livemint",
     "livemint.com": "livemint",
@@ -236,7 +274,7 @@ def build_search_evidence(target: dict, search_results: list[dict]) -> list[dict
         text = f"{result.get('title', '')} {result.get('text', '')}"
         event_type = result.get("event_type") or infer_event_type(text)
 
-        candidates.append(build_evidence_candidate(
+        candidate = build_evidence_candidate(
             symbol=target["symbol"],
             anomaly_date=target["anomaly_date"],
             stock_return=target["daily_return"],
