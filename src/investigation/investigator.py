@@ -43,16 +43,25 @@ def build_investigation_result(
     event_candidates = [
         c for c in candidates
         if c.get("event_type") and c.get("event_type") != "unknown"
+        and c.get("temporal_relevance", 0) >= 0.60
     ]
+
+    event_support = {}
+    for candidate in event_candidates:
+        event_type = candidate["event_type"]
+        event_support[event_type] = event_support.get(event_type, 0.0) + (
+            candidate["evidence_relevance_score"]
+        )
+
     inferred_event = (
         max(
-            event_candidates,
-            key=lambda c: (
-                event_priority.get(c["event_type"], 0),
-                c["evidence_relevance_score"],
+            event_support,
+            key=lambda event_type: (
+                event_support[event_type],
+                event_priority.get(event_type, 0),
             ),
-        )["event_type"]
-        if event_candidates
+        )
+        if event_support
         else (best["event_type"] if best else None)
     )
 
