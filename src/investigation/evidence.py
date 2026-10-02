@@ -4,11 +4,6 @@ from urllib.parse import urlparse
 
 
 DOMAIN_ALIASES = {
-    "finance.yahoo.com": "reuters",
-    "sg.finance.yahoo.com": "reuters",
-    "uk.finance.yahoo.com": "reuters",
-    "ca.finance.yahoo.com": "reuters",
-    "in.finance.yahoo.com": "reuters",
 }
 
 PUBLISHER_ALIASES = {
@@ -49,10 +44,12 @@ def source_family(
     """Collapse known syndication and publisher aliases into evidence families."""
     domain = source_domain(url)
 
-    if domain == "news.google.com" and source_name:
-        return normalize_publisher_name(source_name)
+    publisher = normalize_publisher_name(source_name)
 
-    if domain in {"reuters.com", "reuters"}:
+    if domain == "news.google.com" and source_name:
+        return publisher
+
+    if publisher == "reuters" or domain in {"reuters.com", "reuters"}:
         return "reuters"
 
     return normalize_publisher_name(domain)
