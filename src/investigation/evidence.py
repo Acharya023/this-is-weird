@@ -3,32 +3,59 @@
 from urllib.parse import urlparse
 
 
+DOMAIN_ALIASES = {
+    "finance.yahoo.com": "reuters",
+    "sg.finance.yahoo.com": "reuters",
+    "uk.finance.yahoo.com": "reuters",
+    "ca.finance.yahoo.com": "reuters",
+    "in.finance.yahoo.com": "reuters",
+}
+
+PUBLISHER_ALIASES = {
+    "mint": "livemint",
+    "livemint.com": "livemint",
+    "the mint": "livemint",
+    "economic times": "economic times",
+    "the economic times": "economic times",
+    "financial express": "financial express",
+    "the financial express": "financial express",
+    "business standard": "business standard",
+    "moneycontrol": "moneycontrol",
+}
+
+
 def source_domain(url: str | None) -> str:
     if not url:
         return "unknown"
     domain = urlparse(url).netloc.lower()
-    return domain[4:] if domain.startswith("www.") else domain
+    if domain.startswith("www."):
+        domain = domain[4:]
+    return DOMAIN_ALIASES.get(domain, domain)
+
+
+def normalize_publisher_name(source_name: str | None) -> str:
+    """Normalize common publisher-name variants before grouping evidence."""
+    if not source_name:
+        return "unknown"
+
+    name = " ".join(source_name.strip().lower().split())
+    return PUBLISHER_ALIASES.get(name, name)
 
 
 def source_family(
     url: str | None,
     source_name: str | None = None,
 ) -> str:
-    """Collapse syndication domains while preserving publisher identity."""
+    """Collapse known syndication and publisher aliases into evidence families."""
     domain = source_domain(url)
 
     if domain == "news.google.com" and source_name:
-        return source_name.strip().lower()
+        return normalize_publisher_name(source_name)
 
-    if domain in {
-        "reuters.com",
-        "tradingview.com",
-        "finance.yahoo.com",
-        "sg.finance.yahoo.com",
-    }:
+    if domain in {"reuters.com", "reuters"}:
         return "reuters"
 
-    return domain
+    return normalize_publisher_name(domain)
 
 
 def classify_event_direction(text: str) -> str:
@@ -94,7 +121,7 @@ def infer_event_type(text: str) -> str:
 
 
 def source_quality(source_name: str) -> float:
-    source = source_name.lower()
+    source = normalize_publisher_name(source_name)
 
     if source in {
         "reuters",
@@ -110,7 +137,7 @@ def source_quality(source_name: str) -> float:
         "moneycontrol",
         "economic times",
         "financial express",
-        "mint",
+        "livemint",
         "indian express",
     }:
         return 0.85
