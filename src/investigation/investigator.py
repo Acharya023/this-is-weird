@@ -1,22 +1,22 @@
 """Provider-agnostic anomaly investigation orchestration."""
 
 from .evidence import (
+    build_event_groups,
     build_search_evidence,
-    calculate_evidence_strength,
+    calculate_event_group_strength,
     consolidate_evidence,
 )
 
 
-def build_investigation_result(
-    target: dict,
-    candidates: list[dict],
-) -> dict:
+def build_investigation_result(target: dict, candidates: list[dict]) -> dict:
     """Build one structured investigation record."""
     consolidated = consolidate_evidence(candidates)
-    strength = calculate_evidence_strength(consolidated)
-    best = consolidated["best_candidate"]
+    event_groups = build_event_groups(candidates)
+    best_group = event_groups[0] if event_groups else None
+    best = best_group["best_candidate"] if best_group else consolidated["best_candidate"]
+    strength = calculate_event_group_strength(best_group)
 
-    if not best:
+    if not best_group:
         status = "unclear"
     elif strength >= 0.80:
         status = "strong"
@@ -27,71 +27,27 @@ def build_investigation_result(
     else:
         status = "unclear"
 
-    event_priority = {
-        "earnings": 8,
-        "guidance": 7,
-        "block_trade": 7,
-        "corporate_action": 6,
-        "business_update": 5,
-        "policy_event": 4,
-        "analyst_research": 3,
-        "sector_event": 2,
-        "macro_event": 1,
-        "unknown": 0,
-    }
-
-    event_candidates = [
-        c for c in candidates
-        if c.get("event_type") and c.get("event_type") != "unknown"
-        and c.get("temporal_relevance", 0) >= 0.60
-    ]
-
-    event_support = {}
-    for candidate in event_candidates:
-        event_type = candidate["event_type"]
-        event_support[event_type] = event_support.get(event_type, 0.0) + (
-            candidate["evidence_relevance_score"]
-        )
-
-    inferred_event = (
-        max(
-            event_support,
-            key=lambda event_type: (
-                event_support[event_type],
-                event_priority.get(event_type, 0),
-            ),
-        )
-        if event_support
-        else (best["event_type"] if best else None)
-    )
-
     return {
         "date": target["anomaly_date"],
         "symbol": target["symbol"],
         "search_candidates": consolidated["candidate_count"],
-        "independent_sources": consolidated["independent_source_count"],
-        "source_families": consolidated["source_families"],
-        "direction_matches": consolidated["direction_matches"],
-        "direction_conflicts": consolidated["direction_conflicts"],
+        "independent_sources": best_group["independent_source_count"] if best_group else 0,
+        "source_families": best_group["source_families"] if best_group else [],
+        "direction_matches": best_group["direction_matches"] if best_group else 0,
+        "direction_conflicts": best_group["direction_conflicts"] if best_group else 0,
         "evidence_strength": strength,
         "evidence_status": status,
-        "best_event_type": inferred_event,
+        "best_event_type": best_group["event_type"] if best_group else None,
         "best_headline": best["headline"] if best else None,
         "best_source": best["source_name"] if best else None,
         "best_source_url": best["source_url"] if best else None,
         "best_evidence": best,
-        "evidence_candidates": consolidated["independent_candidates"],
+        "evidence_candidates": best_group["evidence_candidates"] if best_group else [],
+        "event_groups": event_groups,
     }
 
 
 def investigate(target: dict, search_results: list[dict]) -> dict:
     """Run the complete evidence pipeline for one target."""
-    candidates = build_search_evidence(
-        target,
-        search_results,
-    )
-
-    return build_investigation_result(
-        target,
-        candidates,
-    )
+    candidates = build_search_evidence(target, search_results)
+    return build_investigation_result(target, candidates)
