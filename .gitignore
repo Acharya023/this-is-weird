@@ -1,0 +1,16 @@
+# Generated market data
+data/*.sqlite
+data/*.db
+data/raw/
+data/processed/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local tooling
+.vscode/
+.idea/
+.DS_Store
