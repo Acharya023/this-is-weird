@@ -236,10 +236,7 @@ def build_search_evidence(target: dict, search_results: list[dict]) -> list[dict
 
         text = f"{result.get('title', '')} {result.get('text', '')}"
 
-        event_type = result.get(
-            "event_type",
-            infer_event_type(text),
-        )
+        event_type = result.get("event_type") or infer_event_type(text)
 
         candidate = build_evidence_candidate(
             symbol=target["symbol"],
