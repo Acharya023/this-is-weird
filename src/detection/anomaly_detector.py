@@ -72,7 +72,11 @@ def add_market_context(
     market: pl.DataFrame,
     market_return_column: str = "market_return",
 ) -> pl.DataFrame:
-    """Join a market return series and calculate relative divergence."""
+    """Join one market-return observation per date and calculate divergence.
+
+    Repeated market dates are reduced to one date/return pair before joining,
+    preventing stock rows from being multiplied by the benchmark frame.
+    """
     required_frame = {"date", "daily_return"}
     required_market = {"date", market_return_column}
 
@@ -84,10 +88,17 @@ def add_market_context(
     if missing_market:
         raise ValueError(f"Missing market columns: {sorted(missing_market)}")
 
+    market_series = (
+        market
+        .select(["date", market_return_column])
+        .drop_nulls(subset=[market_return_column])
+        .unique(subset=["date"], keep="first")
+    )
+
     return (
         frame
         .join(
-            market.select(["date", market_return_column]),
+            market_series,
             on="date",
             how="left",
         )
