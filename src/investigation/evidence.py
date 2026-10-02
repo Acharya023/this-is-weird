@@ -80,41 +80,63 @@ def classify_event_direction(text: str) -> str:
 
 
 def infer_event_type(text: str) -> str:
+    """Infer an event from distinctive catalyst language.
+
+    Generic words such as profit or revenue are intentionally weak because
+    articles about another catalyst often mention historical financials.
+    """
     text = text.lower()
 
-    if any(x in text for x in [
-        "quarterly results", "quarterly result", "q1", "q2", "q3", "q4",
-        "profit", "revenue", "earnings", "net interest income",
-        "net interest margin", "nim", "provisions", "bad loans",
-    ]):
-        return "earnings"
-    if any(x in text for x in [
-        "stake sale", "block deal", "bulk deal",
-    ]):
-        return "block_trade"
-    if any(x in text for x in [
-        "gst", "tax cut", "government policy", "policy reform",
-    ]):
-        return "policy_event"
-    if any(x in text for x in [
-        "guidance", "forecast", "outlook",
-    ]):
-        return "guidance"
-    if any(x in text for x in [
-        "demerger", "bonus", "split", "dividend",
-        "rights issue", "buyback",
-    ]):
-        return "corporate_action"
-    if any(x in text for x in [
-        "business update", "sales update", "operational update",
-    ]):
-        return "business_update"
-    if any(x in text for x in [
-        "brokerage", "citi research", "analyst", "target price",
-    ]):
-        return "analyst_research"
+    patterns = {
+        "block_trade": [
+            ("block deal", 5), ("bulk deal", 5), ("stake sale", 5),
+            ("stake sold", 5), ("sold stake", 5),
+        ],
+        "policy_event": [
+            ("gst", 5), ("tax cut", 5), ("government policy", 5),
+            ("policy reform", 5), ("regulatory change", 4),
+            ("government decision", 4),
+        ],
+        "corporate_action": [
+            ("demerger", 5), ("rights issue", 5), ("buyback", 5),
+            ("bonus issue", 5), ("stock split", 5), ("split", 3),
+            ("dividend", 4),
+        ],
+        "guidance": [
+            ("guidance", 5), ("forecast", 4), ("outlook", 4),
+            ("raised its forecast", 5), ("cut its forecast", 5),
+            ("lowered guidance", 5),
+        ],
+        "business_update": [
+            ("business update", 5), ("sales update", 5),
+            ("operational update", 5), ("sales rose", 2),
+            ("sales grew", 2),
+        ],
+        "analyst_research": [
+            ("analyst", 4), ("brokerage", 4), ("target price", 5),
+            ("price target", 5), ("citi research", 5),
+            ("research report", 4),
+        ],
+        "earnings": [
+            ("quarterly results", 5), ("quarterly result", 5),
+            ("q1 results", 5), ("q2 results", 5), ("q3 results", 5),
+            ("q4 results", 5), ("reported results", 5),
+            ("results beat", 5), ("results missed", 5),
+            ("earnings report", 5), ("net profit", 3),
+            ("net interest income", 3), ("net interest margin", 3),
+            ("nim", 2), ("provisions", 2), ("bad loans", 2),
+        ],
+    }
 
-    return "unknown"
+    scores = {
+        event_type: sum(
+            weight for phrase, weight in phrases if phrase in text
+        )
+        for event_type, phrases in patterns.items()
+    }
+
+    best_type, best_score = max(scores.items(), key=lambda item: item[1])
+    return best_type if best_score >= 4 else "unknown"
 
 
 def source_quality(source_name: str) -> float:
