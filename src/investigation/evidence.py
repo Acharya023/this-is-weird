@@ -10,9 +10,15 @@ def source_domain(url: str | None) -> str:
     return domain[4:] if domain.startswith("www.") else domain
 
 
-def source_family(url: str | None) -> str:
-    """Collapse obvious syndication domains into one source family."""
+def source_family(
+    url: str | None,
+    source_name: str | None = None,
+) -> str:
+    """Collapse syndication domains while preserving publisher identity."""
     domain = source_domain(url)
+
+    if domain == "news.google.com" and source_name:
+        return source_name.strip().lower()
 
     if domain in {
         "reuters.com",
@@ -280,7 +286,10 @@ def consolidate_evidence(candidates: list[dict]) -> dict:
     seen_headlines = set()
 
     for candidate in ranked:
-        family = source_family(candidate["source_url"])
+        family = source_family(
+            candidate["source_url"],
+            candidate["source_name"],
+        )
         headline = candidate["headline"].lower().strip()
 
         if headline in seen_headlines:
