@@ -3,6 +3,30 @@
 from datetime import date
 
 
+COMPANY_QUERY_ALIASES = {
+    "ASIANPAINT": "Asian Paints",
+    "AXISBANK": "Axis Bank",
+    "BAJFINANCE": "Bajaj Finance",
+    "BHARTIARTL": "Bharti Airtel",
+    "HCLTECH": "HCLTech",
+    "HDFCBANK": "HDFC Bank",
+    "HINDUNILVR": "Hindustan Unilever",
+    "ICICIBANK": "ICICI Bank",
+    "INFY": "Infosys",
+    "KOTAKBANK": "Kotak Mahindra Bank",
+    "LT": "Larsen & Toubro",
+    "MARUTI": "Maruti Suzuki",
+    "NTPC": "NTPC",
+    "ONGC": "ONGC",
+    "RELIANCE": "Reliance Industries",
+    "SBIN": "State Bank of India",
+    "SUNPHARMA": "Sun Pharma",
+    "TCS": "Tata Consultancy Services",
+    "TITAN": "Titan Company",
+    "WIPRO": "Wipro",
+}
+
+
 def investigation_queries(symbol: str, event_date: date) -> list[str]:
     """Return several broad historical queries.
 
