@@ -1,10 +1,16 @@
 """Reproducible semantic investigation test.
 
-Run this after restarting the runtime. It downloads the Hugging Face models
+Run this from the repository root. It downloads the Hugging Face models
 on first use and applies them to real historical Google News results.
 """
 
 from datetime import date
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from src.investigation.google_news import GoogleNewsRSSProvider
 from src.investigation.queries import investigation_queries
