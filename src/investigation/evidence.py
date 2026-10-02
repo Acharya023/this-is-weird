@@ -91,7 +91,7 @@ def classify_event_direction(text: str) -> str:
     positive_terms = [
         "surge", "rally", "rose", "gains", "higher",
         "growth", "upgrade", "strong", "beats", "benefit",
-        "cut taxes", "positive",
+        "boost", "boosts", "cut taxes", "positive",
     ]
     negative_terms = [
         "fall", "fell", "decline", "drop", "tumble",
@@ -141,7 +141,7 @@ def infer_event_type(text: str) -> str:
             ("research report", 4),
         ],
         "earnings": [
-            ("quarterly results", 5), ("quarterly result", 5),
+            ("earnings", 5), ("quarterly results", 5), ("quarterly result", 5),
             ("q1 results", 5), ("q2 results", 5), ("q3 results", 5),
             ("q4 results", 5), ("reported results", 5),
             ("results beat", 5), ("results missed", 5),
@@ -403,13 +403,19 @@ def build_event_groups(candidates: list[dict]) -> list[dict]:
         # number of them must not outrank a smaller set of specific catalyst
         # evidence. Source-family diversity therefore gets less weight than
         # catalyst specificity.
+        # Independent corroboration is useful evidence that a catalyst is
+        # actually associated with the anomaly. Keep the contribution bounded
+        # so article volume cannot overwhelm a strong specific catalyst.
+        corroboration = min(len(independent) / 2.0, 1.0)
+
         group_score = min(
             0.35 * best_score
             + 0.20 * mean_top_score
             + 0.15 * temporal_fit
             + 0.15 * direction_agreement
             + 0.05 * family_diversity
-            + 0.10 * specificity,
+            + 0.05 * corroboration
+            + 0.05 * specificity,
             1.0,
         )
 
