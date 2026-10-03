@@ -1,4 +1,4 @@
-""""Semantic financial NLP for investigation evidence.
+"""Semantic financial NLP for investigation evidence.
 
 The deterministic investigation layer finds unusual market behaviour.
 This module interprets financial text without making model output the final
@@ -402,4 +402,3 @@ class SemanticEvidenceAnalyzer:
             sentiment=sentiment,
             sentiment_confidence=sentiment_confidence,
         )
-"
