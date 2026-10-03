@@ -57,18 +57,7 @@ def detect_scalar_anomaly(
     magnitude = abs(z_score)
 
     if magnitude < config.z_threshold:
-        return AnomalySignal(
-            name="scalar_z_score",
-            score=0.0,
-            direction="up" if latest.value > baseline else "down" if latest.value < baseline else "flat",
-            value=latest.value,
-            baseline=baseline,
-            metadata={
-                "z_score": z_score,
-                "history_size": len(history),
-                "anomalous": False,
-            },
-        )
+        return None
 
     # Convert z-score magnitude into a bounded anomaly score.
     score = min(magnitude / (config.z_threshold * 2.0), 1.0)
