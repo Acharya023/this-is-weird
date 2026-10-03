@@ -1,147 +1,253 @@
-# This Is Weird — Market Edition
+# This Is Weird
 
-The first version of **This Is Weird** discovers statistically unusual events in Indian market data, then investigates them using additional context.
+**This Is Weird** is a domain-agnostic anomaly-discovery system.
 
-The goal is not to predict prices or make trading recommendations. The system should discover events that are unusual enough to deserve investigation and explain why they may be interesting, with evidence separated from statistical detection.
+Its question is not:
 
-## Current experiment status
+> "What is popular?"
 
-The first Colab experiment successfully loaded a 2025 NSE slice from Hugging Face:
+It is:
 
-- **20 exploration symbols**
-- **4,960 rows**
-- **2025 trading history**
-- Daily OHLCV-style market data
+> **"What is changing unusually enough that it deserves investigation, and what evidence explains the change?"**
 
-The experiment has now validated three useful anomaly signals:
+The system is designed to discover unexpected patterns across real-world data rather than start with a fixed list of topics.
 
-1. **Magnitude anomaly** — a return is unusual relative to the stock's own history.
-2. **Activity anomaly** — trading volume is unusually high relative to its recent baseline.
-3. **Relationship anomaly** — a stock behaves substantially differently from another stock that normally moves with it.
-
-A fourth layer will later investigate the strongest candidates using market context, company events, filings and external sources.
-
-## First validated anomaly
-
-A useful experimental example was **HCLTECH on 2025-01-14**:
-
-- Daily return: **−8.84%**
-- Relative volume: **4.77×** its 20-day median
-- HCLTECH's movement diverged sharply from the historical INFY/HCLTECH relationship.
-- NIFTY 50 was not experiencing a comparable broad-market decline that day.
-
-The statistical detector therefore surfaced a concrete event that could then be investigated rather than simply ranking stocks by percentage change.
-
-This example is an experiment, not a claim that the current detector is production-ready.
-
-## Data architecture
-
-- **GitHub:** source code, configuration and documentation.
-- **SQLite:** bounded local/generated market history.
-- **Historical bootstrap:** Hugging Face `tejhq/indian-markets`, whose NSE subset is built from official exchange bhavcopy data and refreshed daily.
-- **Ongoing source:** NSE official reports.
-- **Anomaly detector:** numerical/statistical detection first; investigation/explanation later.
-
-We intentionally do **not** copy the full Hugging Face dataset or SQLite database into Git.
-
-## First-stage scope
-
-The initial bootstrap uses 20 exploration symbols. This keeps the experiment small enough to inspect while providing enough cross-stock variation to test anomaly detection.
-
-The stored daily fields are:
-
-- Symbol
-- Series
-- Trade date
-- Previous close
-- Open / High / Low / Close
-- Last price
-- Volume
-- Turnover
-- Number of trades
-
-VWAP is left empty in the Hugging Face bootstrap because the published dataset schema used for the bootstrap does not expose VWAP. The later NSE ingestion path can populate it.
-
-## Detection approach
-
-The current experimental pipeline is:
+## Core architecture
 
 ```
-Market data
-    ↓
-Daily return
-    ↓
-Stock-specific baseline
-    ↓
-Return anomaly / z-score
-    ↓
-Volume baseline
-    ↓
-Relative-volume anomaly
-    ↓
-Cross-stock relationship
-    ↓
-Divergence candidate
+                    REAL-WORLD SIGNALS
+                           |
+          +----------------+----------------+
+          |                |                |
+       Structured        News            Social
+         data             web          conversations
+          |                |                |
+          +----------------+----------------+
+                           |
+                    Observation layer
+                           |
+                  Anomaly / change detection
+                           |
+                Cross-signal relationship layer
+                           |
+                    Investigation
+                           |
+                  Evidence + NLP/ML
+                           |
+                 Human-readable discovery
 ```
 
-The important design principle is that the statistical layer should **find the anomaly first**. An LLM should not be responsible for deciding whether a numerical event is unusual.
+The important separation is:
 
-The later investigation layer will take selected anomaly candidates and look for supporting or conflicting evidence.
+**Detection finds the unusual thing. Investigation tries to understand it.**
 
-## Efficient bootstrap
+No language model should be allowed to manufacture a numerical anomaly. Likewise, statistical detection alone should not be expected to explain a human phenomenon.
 
-The Hugging Face NSE data is partitioned into Parquet data. The bootstrap downloads only the requested yearly data, filters the configured symbols locally with Polars, and writes only that bounded slice into SQLite.
+## Domains
 
-This is much more efficient than copying the complete market dataset into the repository.
+The architecture is intentionally open-ended.
 
-Install dependencies:
+Potential signal domains include:
 
-```bash
-pip install -r requirements.txt
+- financial markets
+- social-media conversations
+- news and emerging topics
+- internet culture / memes / "brainrot"
+- movies and TV
+- games
+- music
+- creators and celebrities
+- technology and apps
+- companies and brands
+- products and consumer trends
+- sports
+- geopolitics and world events
+- politics and elections, descriptively and without political persuasion
+- previously unknown topics
+
+These are **domains of observation, not a hard-coded topic whitelist**.
+
+A newly emerging topic should be discoverable even if the system has never seen its name before.
+
+## Social-media principle
+
+Social signals are not intended to become a generic sentiment dashboard.
+
+The system should look for changes such as:
+
+- unusual mention velocity
+- sudden topic emergence
+- new phrases or entities
+- unusual co-occurrence of entities
+- discussion spreading between communities
+- sentiment or emotional distribution changing unusually
+- disagreement between social activity and other signals
+- a topic becoming large before mainstream coverage
+- a previously quiet topic suddenly returning
+
+The same engine should be capable of finding an unexpected meme and an unexpected geopolitical discussion. Their importance is investigated after detection rather than assumed beforehand.
+
+## Cross-signal discovery
+
+The most interesting candidates may be relationships between domains:
+
+```
+Social spike
+    ↓
+News appears
+    ↓
+Market reaction
 ```
 
-Then:
+or:
 
-```bash
-python src/ingestion/bootstrap_hf.py 5
+```
+Market anomaly
+    ↓
+No obvious news
+    ↓
+Unusual social discussion
 ```
 
-The argument is the number of years to load.
+or:
 
-## Next milestone
+```
+Social anomaly
+    ↓
+No known entity
+    ↓
+New topic discovered
+```
 
-The next engineering milestone is to move from the 20-stock experiment toward a proper market-context engine:
+Therefore the system should not score each domain independently and simply add the numbers. It should eventually reason about **agreement, disagreement, timing and propagation between signals**.
 
-1. Build a reliable NIFTY 50 universe.
-2. Add NIFTY 50 index data.
-3. Calculate market-relative returns.
-4. Replace exploratory formulas with reusable anomaly-detection code.
-5. Test anomaly candidates across a larger universe.
-6. Add the investigation/evidence layer.
-7. Produce the first automated **This Is Weird** discovery record.
+## Current implementation status
 
-The current Colab calculations are exploratory and should not yet be treated as the production detector.
+The repository began as a narrow Indian-market experiment. That work remains useful as the first domain adapter.
 
+The current market detector has validated:
 
-## Investigation architecture
+1. stock-specific return anomalies
+2. unusual trading activity
+3. cross-stock relationship/divergence signals
+4. market-relative context
 
-The project now separates anomaly detection from investigation.
+The current investigation layer has also validated:
 
-- `src/detection/anomaly_detector.py` contains reusable adjusted-price anomaly features and discovery scoring.
-- `src/investigation/queries.py` generates compact investigation queries.
-- `src/investigation/evidence.py` normalizes events, scores temporal/directional/source relevance, and removes obvious syndicated duplicates.
-- `src/investigation/investigator.py` provides provider-agnostic investigation orchestration.
-- `src/storage/discoveries.py` persists discoveries and evidence to SQLite.
-- `tests/test_evidence.py` covers the evidence layer.
+- Google News discovery
+- source-family normalization
+- event grouping
+- target-aware financial evidence extraction
+- financial facts and quantities
+- financial NER
+- sentiment
+- experimental relation extraction
 
-The search provider is deliberately not hard-coded into the investigator. This allows different backends to supply search results without changing the evidence logic.
+Those components should now be treated as **market-domain components**, not as the definition of the whole project.
 
-Current providers:
-- `src/investigation/google_news.py` — Google News keyword-search RSS, requiring no API key. This is the preferred low-cost/no-token development provider for news/event investigation.
-- `src/investigation/searxng.py` — optional SearXNG JSON provider. Public SearXNG instances are not reliable enough to assume JSON access, so this remains configurable rather than being the default.
+## Domain-neutral discovery core
 
-The Google News provider is intentionally treated as a news-discovery source, not as proof by itself. The existing evidence layer still scores temporal relevance, direction, source quality and independent corroboration.
+`src/core/discovery.py` contains the shared representations:
 
-Evidence strength measures support from available evidence; it is not a probability of causation.
+- `Observation`
+- `AnomalySignal`
+- `DiscoveryCandidate`
 
-Evidence strength measures support from available evidence; it is not a probability of causation.
+A domain adapter should convert its raw data into these structures. This allows a market anomaly and a social-media anomaly to enter the same downstream discovery/investigation architecture without pretending their raw measurements are identical.
+
+## Development strategy
+
+We will expand in layers rather than prematurely build the entire internet.
+
+### Stage 1 — Broaden the market observation space
+
+Move beyond the experimental 20-stock universe toward:
+
+- NIFTY 50 / broader equity universe
+- sector indices
+- market breadth
+- volatility and other market context
+- longer historical baselines
+
+The existing market detector remains useful for validating the architecture.
+
+### Stage 2 — Build the social observation layer
+
+Start with reproducible public/authorized sources rather than scraping everything indiscriminately.
+
+The social layer should produce time-windowed observations such as:
+
+- entity/topic mention counts
+- unique-post counts where available
+- discussion velocity
+- semantic clusters
+- emerging phrases
+- source/community distribution
+
+### Stage 3 — Discover unknown topics
+
+Use embeddings, clustering and temporal novelty detection to find topics without requiring a predefined taxonomy.
+
+### Stage 4 — Cross-domain correlation
+
+Connect market, news and social observations through:
+
+- entities
+- timestamps
+- semantic similarity
+- event relationships
+- propagation patterns
+
+### Stage 5 — Investigation
+
+Only after a candidate survives detection should heavyweight NLP/search be used to answer:
+
+- What happened?
+- What entities are involved?
+- What changed?
+- When did it begin?
+- Which sources independently report it?
+- Which signals agree or conflict?
+- What evidence supports the explanation?
+
+## Hugging Face
+
+Hugging Face models and datasets should provide genuine ML/data capabilities where they improve the system:
+
+- embeddings
+- semantic clustering
+- entity extraction
+- event extraction
+- sentiment/emotion where useful
+- domain-specific language understanding
+- historical datasets
+
+Models are components of the system, not decoration. A model should earn its place through a benchmark.
+
+## Engineering rule
+
+Every major new layer gets its own reproducible repository test before it is connected to production scoring.
+
+The workflow is:
+
+```
+change repository
+      ↓
+add/update test script
+      ↓
+restart runtime
+      ↓
+git pull
+      ↓
+run test
+      ↓
+inspect results
+      ↓
+only then integrate
+```
+
+## Current principle
+
+**Do not optimize the explanation engine before the discovery universe is broad enough.**
+
+The original 20-stock experiment taught us how to build anomaly detection and evidence extraction. The next phase is to make the underlying discovery engine genuinely domain-agnostic.
