@@ -22,6 +22,9 @@ from typing import Any
 NER_MODEL = "ritam-m/bert-base-company-ner"
 EVENT_MODEL = "ritessshhh/FinDeBERTa"
 SENTIMENT_MODEL = "ProsusAI/finbert"
+RELATION_MODEL = "fastino/gliner2.5-small-v1"
+RELATION_THRESHOLD = 0.30
+RELATION_TYPES = ["sells shares of", "causes", "affects", "reports", "announces", "results in", "is the reason for", "lowers", "raises", "changes guidance for"]
 
 # Kept as a compatibility alias for callers that used the old constant.
 GLINER_MODEL = NER_MODEL
@@ -150,6 +153,7 @@ class FinancialNLPAnalysis:
     event_labels: list[dict] = field(default_factory=list)
     mapped_event_types: list[str] = field(default_factory=list)
     financial_facts: list[dict] = field(default_factory=list)
+    relations: list[dict] = field(default_factory=list)
     sentiment: str | None = None
     sentiment_confidence: float | None = None
 
@@ -175,6 +179,7 @@ class FinancialNLPAnalyzer:
         self.sentiment_model_name = sentiment_model_name
         self.enable_sentiment = enable_sentiment
         self._event_tokenizer = None
+        self._relation_extractor = None
 
     @staticmethod
     def article_text(article: dict) -> str:
@@ -212,6 +217,12 @@ class FinancialNLPAnalyzer:
                 model=self.sentiment_model_name,
             )
         return self._sentiment_classifier
+
+    def _load_relation_extractor(self):
+        if self._relation_extractor is None:
+            from gliner2 import AutoExtractor
+            self._relation_extractor = AutoExtractor.from_pretrained(RELATION_MODEL)
+        return self._relation_extractor
 
     @staticmethod
     def _regex_facts(text: str) -> list[dict]:
@@ -275,6 +286,30 @@ class FinancialNLPAnalyzer:
             return []
         return self._regex_facts(text)
 
+    def extract_relations(self, text: str) -> list[dict]:
+        if not text:
+            return []
+        result = self._load_relation_extractor().extract_relations(
+            text, RELATION_TYPES, threshold=RELATION_THRESHOLD,
+            include_spans=True, include_confidence=True,
+        )
+        relations = []
+        for relation_type, items in result.get("relation_extraction", {}).items():
+            for relation in items:
+                head = relation.get("head", {})
+                tail = relation.get("tail", {})
+                confidence = relation.get("confidence")
+                if confidence is None:
+                    scores = [float(score) for score in (head.get("confidence"), tail.get("confidence")) if score is not None]
+                    confidence = min(scores) if scores else None
+                relations.append({
+                    "relation": relation_type,
+                    "head": head.get("text", ""),
+                    "tail": tail.get("text", ""),
+                    "score": confidence,
+                })
+        return sorted(relations, key=lambda item: item["score"] if item["score"] is not None else 0.0, reverse=True)
+
     def detect_events(self, text: str) -> list[dict]:
         if not text:
             return []
@@ -312,6 +347,7 @@ class FinancialNLPAnalyzer:
         entities = self.extract_entities(text)
         facts = self.extract_financial_facts(text)
         event_labels = self.detect_events(text)
+        relations = self.extract_relations(text)
 
         sentiment = None
         sentiment_confidence = None
@@ -331,6 +367,7 @@ class FinancialNLPAnalyzer:
             event_labels=event_labels,
             mapped_event_types=mapped,
             financial_facts=facts,
+            relations=relations,
             sentiment=sentiment,
             sentiment_confidence=sentiment_confidence,
         )
