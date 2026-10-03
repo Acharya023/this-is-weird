@@ -450,6 +450,7 @@ class FinancialNLPAnalyzer:
             }
             for i in range(len(probabilities))
             if probabilities[i] >= 0.50
+            and EVENT_TYPE_MAP.get(labels[i], "unknown") != "unknown"
         ]
         return sorted(predictions, key=lambda item: item["score"], reverse=True)
 
