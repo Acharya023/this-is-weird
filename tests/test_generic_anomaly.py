@@ -35,9 +35,7 @@ def test_ignores_normal_change():
         config=AnomalyConfig(min_history=5, z_threshold=3.0),
     )
 
-    assert signal is not None
-    assert signal.metadata["anomalous"] is False
-    assert signal.score == 0.0
+    assert signal is None
 
 
 def test_requires_enough_history():
