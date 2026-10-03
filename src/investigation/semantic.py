@@ -310,6 +310,32 @@ class FinancialNLPAnalyzer:
             return []
         return self._regex_facts(text)
 
+    @staticmethod
+    def _relation_is_structured(relation: dict) -> bool:
+        """Keep explicit actor/action/object relations, not article boilerplate."""
+        relation_type = str(relation.get("relation", "")).lower()
+        head = str(relation.get("head", "")).strip().lower()
+        tail = str(relation.get("tail", "")).strip().lower()
+
+        if relation_type in {"reports", "announces"}:
+            return False
+        if head in {"moneycontrol.com", "hindustan times", "equitymaster", "livemint", "fortune india", "upstox"}:
+            return False
+        if len(tail.split()) > 12:
+            return False
+        if any(
+            phrase in tail
+            for phrase in (
+                "buy or sell", "share price", "stocks to watch",
+                "top gainers", "today's session", "why",
+            )
+        ):
+            return False
+        return relation_type in {
+            "sells shares of", "causes", "affects", "results in",
+            "is the reason for", "lowers", "raises", "changes guidance for",
+        }
+
     def extract_relations(self, text: str, target_aliases: list[str] | None = None) -> list[dict]:
         if not text:
             return []
@@ -334,7 +360,15 @@ class FinancialNLPAnalyzer:
                     continue
                 if any(phrase in combined for phrase in ("buy or sell", "should you buy", "why?")):
                     continue
-                relations.append({"relation": relation_type, "head": head_text, "tail": tail_text, "score": confidence})
+                candidate = {
+                    "relation": relation_type,
+                    "head": head_text,
+                    "tail": tail_text,
+                    "score": confidence,
+                }
+                if not self._relation_is_structured(candidate):
+                    continue
+                relations.append(candidate)
         return sorted(relations, key=lambda item: item["score"] if item["score"] is not None else 0.0, reverse=True)
 
     @staticmethod
