@@ -15,17 +15,19 @@ from gliner2 import AutoExtractor
 
 MODEL_NAME = "fastino/gliner2.5-small-v1"
 
+CONTROL_RELATIONS = ["works_for"]
+
 RELATIONS = [
-    "caused_by",
-    "affected",
-    "sold_shares_of",
-    "announced",
-    "reported",
-    "resulted_in",
-    "reason_for",
-    "lowered",
-    "raised",
-    "guidance_change",
+    "sells shares of",
+    "causes",
+    "affects",
+    "reports",
+    "announces",
+    "results in",
+    "is the reason for",
+    "lowers",
+    "raises",
+    "changes guidance for",
 ]
 
 SAMPLES = {
@@ -69,6 +71,23 @@ def main() -> None:
 
     total = 0.0
 
+    print("=" * 80)
+    print("API / MODEL CONTROL")
+    control_text = "Alice works for Acme."
+    print(control_text)
+    start = time.perf_counter()
+    control = extractor.extract_relations(
+        control_text,
+        CONTROL_RELATIONS,
+        threshold=0.30,
+        include_spans=True,
+        include_confidence=True,
+    )
+    elapsed = time.perf_counter() - start
+    print(f"Control extraction time: {elapsed:.3f}s")
+    print(control)
+    print()
+
     for name, text in SAMPLES.items():
         print("=" * 80)
         print(name)
@@ -79,6 +98,7 @@ def main() -> None:
         result = extractor.extract_relations(
             text,
             RELATIONS,
+            threshold=0.30,
             include_spans=True,
             include_confidence=True,
         )
