@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from datetime import date
 
+from src.investigation.evidence import COMPANY_ALIASES
 from src.investigation.google_news import GoogleNewsRSSProvider
 from src.investigation.queries import investigation_queries
 from src.investigation.semantic import FinancialNLPAnalyzer
@@ -91,7 +92,7 @@ def main() -> None:
             print(title)
 
             start = time.perf_counter()
-            analysis = analyzer.analyze(article)
+            analysis = analyzer.analyze(article, target_aliases=COMPANY_ALIASES.get(symbol, [symbol]))
             elapsed = time.perf_counter() - start
             total_nlp_time += elapsed
             analyzed += 1
@@ -102,6 +103,14 @@ def main() -> None:
             ]
 
             print(f"NLP time: {elapsed:.2f}s")
+            print(f"DETERMINISTIC EVENT | {analysis.deterministic_event_type}")
+            print(
+                "TARGET COMPANIES | "
+                + (
+                    ", ".join(f"{item['text']} ({item['score']:.2f})" for item in analysis.target_entities)
+                    if analysis.target_entities else "none"
+                )
+            )
             print(
                 "COMPANIES | "
                 + (
@@ -144,7 +153,7 @@ def main() -> None:
                     ", ".join(
                         f"{item['label']}={item['text']}"
                         for item in analysis.financial_facts
-                        if item["label"] in {"percentage", "amount", "date"}
+                        if item["label"] in {"percentage", "amount", "quantity", "date"}
                     )
                     or "none"
                 )
