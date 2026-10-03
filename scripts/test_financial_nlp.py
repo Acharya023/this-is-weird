@@ -1,4 +1,4 @@
-""""Fast, reproducible financial NLP benchmark."""
+"""Fast, reproducible financial NLP benchmark."""
 
 from pathlib import Path
 import sys
@@ -139,4 +139,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-"
