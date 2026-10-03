@@ -37,7 +37,7 @@ FINANCIAL_FACT_PATTERNS = {
     "amount": [
         r"(?<!\w)₹\s*[\d,.]+(?:\s*(?:crore|cr|lakh|million|billion))?",
         r"(?<!\w)\\$\s*[\d,.]+(?:\s*(?:million|billion))?",
-        r"(?<!\w)[\d,.]+\s*(?:crore|cr|lakh|million|billion)\b",
+        r"(?<!\w)[\d,.]+\s*(?:crore|cr|lakh|million|billion)\b(?=\s+(?:rupees|INR|USD|dollars|revenue|profit|crore|lakh))",
     ],
     "quantity": [
         r"(?<!\w)(?:\d+(?:\.\d+)?)\s*(?:crore|cr|lakh|million|billion)\s+(?:shares|stocks|units|customers|users|vehicles|orders)\b",
@@ -235,9 +235,27 @@ class FinancialNLPAnalyzer:
         facts = []
         seen = set()
 
+        quantity_spans: list[tuple[int, int]] = []
+
+        for pattern in FINANCIAL_FACT_PATTERNS["quantity"]:
+            for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+                quantity_spans.append(match.span())
+                value = match.group(0).strip()
+                key = ("quantity", value.lower())
+                if key not in seen:
+                    facts.append({"label": "quantity", "text": value, "score": 1.0})
+                    seen.add(key)
+
         for label, patterns in FINANCIAL_FACT_PATTERNS.items():
+            if label == "quantity":
+                continue
             for pattern in patterns:
                 for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+                    if label == "amount" and any(
+                        start <= match.start() and match.end() <= end
+                        for start, end in quantity_spans
+                    ):
+                        continue
                     value = match.group(0).strip()
                     key = (label, value.lower())
                     if key not in seen:
@@ -326,21 +344,51 @@ class FinancialNLPAnalyzer:
 
     @staticmethod
     def target_company_entities(entities: list[dict], target_aliases: list[str]) -> list[dict]:
-        aliases = [alias.lower() for alias in target_aliases]
+        aliases = sorted(
+            (alias.lower().strip() for alias in target_aliases if alias.strip()),
+            key=len,
+            reverse=True,
+        )
         matches = []
         seen = set()
+
         for entity in entities:
             if str(entity.get("label", "")).lower() != "company":
                 continue
             entity_text = str(entity.get("text", "")).strip()
             if not entity_text:
                 continue
-            if any(alias in entity_text.lower() for alias in aliases):
-                key = entity_text.lower()
-                if key not in seen:
-                    matches.append(entity)
-                    seen.add(key)
-        return matches
+
+            lowered = entity_text.lower()
+            matched_alias = next((alias for alias in aliases if alias in lowered), None)
+            if not matched_alias:
+                continue
+
+            key = entity_text.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            matches.append({
+                "text": entity_text,
+                "label": "company",
+                "score": float(entity.get("score", 0.0)),
+                "matched_alias": matched_alias,
+            })
+
+        if not matches:
+            return []
+
+        longest = max(len(item["matched_alias"]) for item in matches)
+        preferred = [item for item in matches if len(item["matched_alias"]) == longest]
+        preferred_texts = {item["text"].lower() for item in preferred}
+        return preferred + [
+            item for item in matches
+            if item["text"].lower() not in preferred_texts
+            and not any(
+                item["text"].lower() in preferred_item["text"].lower()
+                for preferred_item in preferred
+            )
+        ]
 
     def detect_events(self, text: str) -> list[dict]:
         if not text:
