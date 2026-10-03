@@ -1,29 +1,20 @@
 """Domain-agnostic discovery primitives for This Is Weird.
 
-A discovery is an unusual change in an observed stream.  The stream may be
+A discovery is an unusual change in an observed stream. The stream may be
 financial, social, news, entertainment, sports, technology, or another domain.
-Domain-specific detectors should produce observations and anomaly signals;
-this module provides the common representation used downstream.
+Domain-specific detectors produce anomaly signals; investigation determines
+what the anomaly means.
 """
 
 from dataclasses import dataclass, field
 from typing import Any
 
-
-@dataclass
-class Observation:
-    """One timestamped observation from any supported domain."""
-
-    observed_at: str
-    source: str
-    entity: str | None = None
-    value: float | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+from .observations import Observation
 
 
 @dataclass
 class AnomalySignal:
-    """A domain-specific signal that an observation changed unusually."""
+    """A signal that an observation changed unusually."""
 
     name: str
     score: float
@@ -43,6 +34,9 @@ class DiscoveryCandidate:
     score: float
     signals: list[AnomalySignal] = field(default_factory=list)
     observations: list[Observation] = field(default_factory=list)
+
+    # Context that helps decide whether the anomaly deserves human attention.
+    # These are descriptive inputs, not an overall human-facing verdict.
     context: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
