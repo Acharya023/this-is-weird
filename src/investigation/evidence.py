@@ -161,6 +161,47 @@ def infer_event_type(text: str) -> str:
     return best_type if best_score >= 4 else "unknown"
 
 
+def search_result_quality(article: dict, target_aliases: list[str]) -> float:
+    """Score whether a search result looks like explanatory evidence."""
+    title = str(article.get("title") or "").strip()
+    text = str(article.get("text") or "").strip()
+    combined = f"{title} {text}".lower()
+
+    aliases = [alias.lower() for alias in target_aliases if alias.strip()]
+    entity_match = 1.0 if any(alias in combined for alias in aliases) else 0.0
+    if not entity_match:
+        return 0.0
+
+    score = 0.50
+
+    explanatory_markers = (
+        "why", "after", "due to", "because", "amid", "following",
+        "results", "guidance", "outlook", "block deal", "bulk deal",
+        "stake sale", "update", "missed", "beat", "cut forecast",
+        "downgrade", "upgrade",
+    )
+    if any(marker in combined for marker in explanatory_markers):
+        score += 0.30
+
+    listicle_markers = (
+        "stocks to watch", "top gainers", "top losers", "check full list",
+        "among top gainers", "stocks in focus",
+    )
+    if any(marker in combined for marker in listicle_markers):
+        score -= 0.35
+
+    pure_price_markers = (
+        "share price today", "stock price today", "live updates",
+    )
+    if any(marker in title.lower() for marker in pure_price_markers):
+        score -= 0.15
+
+    if text and len(text) >= 120:
+        score += 0.10
+
+    return max(0.0, min(score, 1.0))
+
+
 def source_quality(source_name: str) -> float:
     source = normalize_publisher_name(source_name)
     if source in {
