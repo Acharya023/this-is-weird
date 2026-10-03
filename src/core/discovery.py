@@ -9,7 +9,15 @@ what the anomaly means.
 from dataclasses import dataclass, field
 from typing import Any
 
-from .observations import Observation
+@dataclass
+class Observation:
+    """One timestamped observation from any supported domain."""
+
+    observed_at: str
+    source: str
+    entity: str | None = None
+    value: float | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
