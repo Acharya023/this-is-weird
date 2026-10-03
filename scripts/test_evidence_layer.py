@@ -1,11 +1,11 @@
+"""Focused benchmark for the target-aware deterministic evidence layer."""
+
 from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-
-"""Focused benchmark for the target-aware deterministic evidence layer."""
 
 from src.investigation.evidence import COMPANY_ALIASES
 from src.investigation.semantic import FinancialNLPAnalyzer
@@ -47,12 +47,11 @@ def main() -> None:
 
     fact_text = {(item["label"], item["text"]) for item in facts}
     assert ("percentage", "3.5%") in fact_text
-    assert any(
-        item["label"] == "quantity" and "5.1 crore shares" in item["text"].lower()
-        for item in facts
-    )
+    assert ("quantity", "5.1 crore shares") in fact_text
+    assert ("amount", "5.1 crore") not in fact_text
     assert event == "block_trade"
-    assert len(target) >= 1
+    assert len(target) == 1
+    assert target[0]["text"] == "Bharti Airtel"
     assert all(item["text"].strip() for item in target)
 
     print("PASS")
