@@ -114,12 +114,27 @@ def main() -> None:
                 head = relation.get("head", {})
                 tail = relation.get("tail", {})
                 confidence = relation.get("confidence")
+                if confidence is None:
+                    head_score = head.get("confidence")
+                    tail_score = tail.get("confidence")
+                    scores = [
+                        float(score)
+                        for score in (head_score, tail_score)
+                        if score is not None
+                    ]
+                    confidence = min(scores) if scores else None
+
+                score_text = (
+                    f"{float(confidence):.3f}"
+                    if confidence is not None
+                    else "n/a"
+                )
                 print(
                     "REL | "
                     f"{head.get('text', '')} "
                     f"-[{relation_type}]-> "
                     f"{tail.get('text', '')} "
-                    f"| score={float(confidence):.3f}"
+                    f"| score={score_text}"
                 )
                 printed += 1
 
