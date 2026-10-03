@@ -31,21 +31,21 @@ GLINER_MODEL = NER_MODEL
 
 FINANCIAL_FACT_PATTERNS = {
     "percentage": [
-        r"(?<!\\w)(?:\\d+(?:\\.\\d+)?|\\.\\d+)\\s*%",
-        r"(?<!\\w)(?:\\d+(?:\\.\\d+)?)\\s*percent\\b",
+        r"(?<!\w)(?:\d+(?:\.\d+)?|\.\d+)\s*%",
+        r"(?<!\w)(?:\d+(?:\.\d+)?)\s*percent\b",
     ],
     "amount": [
-        r"(?<!\\w)₹\\s*[\\d,.]+(?:\\s*(?:crore|cr|lakh|million|billion))?",
-        r"(?<!\\w)\\$\\s*[\\d,.]+(?:\\s*(?:million|billion))?",
-        r"(?<!\\w)[\\d,.]+\\s*(?:crore|cr|lakh|million|billion)\\b",
+        r"(?<!\w)₹\s*[\d,.]+(?:\s*(?:crore|cr|lakh|million|billion))?",
+        r"(?<!\w)\\$\s*[\d,.]+(?:\s*(?:million|billion))?",
+        r"(?<!\w)[\d,.]+\s*(?:crore|cr|lakh|million|billion)\b",
     ],
     "quantity": [
-        r"(?<!\\w)(?:\\d+(?:\\.\\d+)?)\\s*(?:crore|cr|lakh|million|billion)\\s+(?:shares|stocks|units|customers|users|vehicles|orders)\\b",
-        r"(?<!\\w)(?:\\d+(?:\\.\\d+)?)\\s*(?:shares|stocks|units|customers|users|vehicles|orders)\\b",
+        r"(?<!\w)(?:\d+(?:\.\d+)?)\s*(?:crore|cr|lakh|million|billion)\s+(?:shares|stocks|units|customers|users|vehicles|orders)\b",
+        r"(?<!\w)(?:\d+(?:\.\d+)?)\s*(?:shares|stocks|units|customers|users|vehicles|orders)\b",
     ],
     "date": [
-        r"\\b(?:Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)\\s+\\d{1,2}(?:,\\s*\\d{4})?\\b",
-        r"\\b\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}\\b",
+        r"\b(?:Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)\s+\d{1,2}(?:,\s*\d{4})?\b",
+        r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
     ],
 }
 
@@ -253,7 +253,7 @@ class FinancialNLPAnalyzer:
                     seen.add(key)
 
         for phrase in FINANCIAL_TERM_PATTERNS:
-            if re.search(r"(?<!\\w)" + re.escape(phrase) + r"(?!\\w)", lowered):
+            if re.search(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", lowered):
                 key = ("financial_term", phrase)
                 if key not in seen:
                     facts.append({"label": "financial_term", "text": phrase, "score": 1.0})
