@@ -39,6 +39,10 @@ FINANCIAL_FACT_PATTERNS = {
         r"(?<!\\w)\\$\\s*[\\d,.]+(?:\\s*(?:million|billion))?",
         r"(?<!\\w)[\\d,.]+\\s*(?:crore|cr|lakh|million|billion)\\b",
     ],
+    "quantity": [
+        r"(?<!\\w)(?:\\d+(?:\\.\\d+)?)\\s*(?:crore|cr|lakh|million|billion)\\s+(?:shares|stocks|units|customers|users|vehicles|orders)\\b",
+        r"(?<!\\w)(?:\\d+(?:\\.\\d+)?)\\s*(?:shares|stocks|units|customers|users|vehicles|orders)\\b",
+    ],
     "date": [
         r"\\b(?:Jan|January|Feb|February|Mar|March|Apr|April|May|Jun|June|Jul|July|Aug|August|Sep|Sept|September|Oct|October|Nov|November|Dec|December)\\s+\\d{1,2}(?:,\\s*\\d{4})?\\b",
         r"\\b\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}\\b",
@@ -154,6 +158,8 @@ class FinancialNLPAnalysis:
     mapped_event_types: list[str] = field(default_factory=list)
     financial_facts: list[dict] = field(default_factory=list)
     relations: list[dict] = field(default_factory=list)
+    deterministic_event_type: str = "unknown"
+    target_entities: list[dict] = field(default_factory=list)
     sentiment: str | None = None
     sentiment_confidence: float | None = None
 
@@ -286,29 +292,55 @@ class FinancialNLPAnalyzer:
             return []
         return self._regex_facts(text)
 
-    def extract_relations(self, text: str) -> list[dict]:
+    def extract_relations(self, text: str, target_aliases: list[str] | None = None) -> list[dict]:
         if not text:
             return []
         result = self._load_relation_extractor().extract_relations(
             text, RELATION_TYPES, threshold=RELATION_THRESHOLD,
             include_spans=True, include_confidence=True,
         )
+        aliases = [alias.lower() for alias in (target_aliases or [])]
         relations = []
         for relation_type, items in result.get("relation_extraction", {}).items():
             for relation in items:
                 head = relation.get("head", {})
                 tail = relation.get("tail", {})
+                head_text = str(head.get("text", "")).strip()
+                tail_text = str(tail.get("text", "")).strip()
                 confidence = relation.get("confidence")
                 if confidence is None:
                     scores = [float(score) for score in (head.get("confidence"), tail.get("confidence")) if score is not None]
                     confidence = min(scores) if scores else None
-                relations.append({
-                    "relation": relation_type,
-                    "head": head.get("text", ""),
-                    "tail": tail.get("text", ""),
-                    "score": confidence,
-                })
+                combined = f"{head_text} {tail_text}".lower()
+                if aliases and not any(alias in combined for alias in aliases):
+                    continue
+                if any(phrase in combined for phrase in ("buy or sell", "should you buy", "why?")):
+                    continue
+                relations.append({"relation": relation_type, "head": head_text, "tail": tail_text, "score": confidence})
         return sorted(relations, key=lambda item: item["score"] if item["score"] is not None else 0.0, reverse=True)
+
+    @staticmethod
+    def deterministic_event_type(text: str) -> str:
+        from src.investigation.evidence import infer_event_type
+        return infer_event_type(text)
+
+    @staticmethod
+    def target_company_entities(entities: list[dict], target_aliases: list[str]) -> list[dict]:
+        aliases = [alias.lower() for alias in target_aliases]
+        matches = []
+        seen = set()
+        for entity in entities:
+            if str(entity.get("label", "")).lower() != "company":
+                continue
+            entity_text = str(entity.get("text", "")).strip()
+            if not entity_text:
+                continue
+            if any(alias in entity_text.lower() for alias in aliases):
+                key = entity_text.lower()
+                if key not in seen:
+                    matches.append(entity)
+                    seen.add(key)
+        return matches
 
     def detect_events(self, text: str) -> list[dict]:
         if not text:
@@ -339,7 +371,7 @@ class FinancialNLPAnalyzer:
         ]
         return sorted(predictions, key=lambda item: item["score"], reverse=True)
 
-    def analyze(self, article: dict) -> FinancialNLPAnalysis:
+    def analyze(self, article: dict, target_aliases: list[str] | None = None) -> FinancialNLPAnalysis:
         text = self.article_text(article)
         if not text:
             return FinancialNLPAnalysis()
@@ -347,7 +379,9 @@ class FinancialNLPAnalyzer:
         entities = self.extract_entities(text)
         facts = self.extract_financial_facts(text)
         event_labels = self.detect_events(text)
-        relations = self.extract_relations(text)
+        relations = self.extract_relations(text, target_aliases=target_aliases)
+        deterministic_event = self.deterministic_event_type(text)
+        target_entities = self.target_company_entities(entities, target_aliases or [])
 
         sentiment = None
         sentiment_confidence = None
@@ -368,6 +402,8 @@ class FinancialNLPAnalyzer:
             mapped_event_types=mapped,
             financial_facts=facts,
             relations=relations,
+            deterministic_event_type=deterministic_event,
+            target_entities=target_entities,
             sentiment=sentiment,
             sentiment_confidence=sentiment_confidence,
         )
