@@ -5,3 +5,4 @@ polars>=1.0
 torch>=2.0
 
 requests>=2.31
+gliner2>=1.2
