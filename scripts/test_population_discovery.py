@@ -33,22 +33,7 @@ def main():
     discoveries = score_population_discoveries(history)
 
     print("\nTop 25 population-wide candidates:")
-    print(
-        discoveries
-        .head(25)
-        .select([
-            "date",
-            "symbol",
-            "daily_return",
-            "return_z",
-            "volume_ratio",
-            "cross_return_score",
-            "cross_volume_score",
-            "population_discovery_score",
-        ])
-        .to_pandas()
-        .to_string(index=False)
-    )
+    print(discoveries.head(25))
 
     print("\nThis is a candidate generator.")
     print("No predefined symbol list or benchmark was used.")
