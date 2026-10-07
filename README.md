@@ -155,6 +155,55 @@ Those components should now be treated as **market-domain components**, not as t
 
 A domain adapter should convert its raw data into these structures. This allows a market anomaly and a social-media anomaly to enter the same downstream discovery/investigation architecture without pretending their raw measurements are identical.
 
+## Current market discovery architecture
+
+The original 20-stock experiment is now explicitly a **controlled regression fixture**, not the discovery universe.
+
+The market path is:
+
+```
+Hugging Face historical market data
+              |
+              v
+     discover observed universe
+              |
+              v
+       adjusted-price history
+              |
+              v
+       population-wide features
+              |
+       +------+------+
+       |             |
+ historical      cross-sectional
+ abnormality      abnormality
+       |             |
+       +------+-----+
+              |
+              v
+      candidate discoveries
+              |
+              v
+     peer / market context
+              |
+              v
+       internet investigation
+```
+
+The population detector intentionally does **not** read `config/bootstrap_symbols.txt`. That file remains useful for small deterministic regression tests.
+
+## Historical data strategy
+
+We should not put a giant market-history file inside the Git repository.
+
+**Hugging Face is the persistent data layer.**
+
+The current market adapter uses the public `tejhq/indian-markets` dataset, which provides broad NSE history, including back-adjusted prices and raw volume. Runtime downloads are cached locally and the repository stores only code/configuration.
+
+For data that **we derive ourselves** — normalized observations, population-level features, anomaly candidates, daily discovery scores, cross-signal relationships, and investigation results — we can maintain a separate project-owned Hugging Face dataset as the historical store. This lets the system accumulate history across runs without turning Git into a data warehouse.
+
+**GitHub = code and reproducible logic. Hugging Face = large, persistent data/history.**
+
 ## Development strategy
 
 We will expand in layers rather than prematurely build the entire internet.
